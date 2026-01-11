@@ -1,198 +1,211 @@
 /**
  * Quoth Search Module
- * Handles document indexing and search functionality
+ * Vector-based semantic search using Supabase + Gemini embeddings
  */
 
-import fs from 'fs/promises';
-import path from 'path';
-import matter from 'gray-matter';
-import {
-  type DocumentReference,
-  type QuothDocument,
-  type SearchIndex,
-  DocumentFrontmatterSchema,
-  DEFAULT_CONFIG,
-} from './types';
+import { supabase, isSupabaseConfigured, getProjectBySlug, type MatchResult } from '../supabase';
+import { generateEmbedding, isAIConfigured } from '../ai';
+import type { DocumentReference, QuothDocument } from './types';
 
-// Simple in-memory cache for development
-let cachedIndex: SearchIndex | null = null;
-let cacheTimestamp: number = 0;
+// Default project slug (can be overridden via env)
+const DEFAULT_PROJECT_SLUG = process.env.QUOTH_PROJECT_SLUG || 'quoth-knowledge-base';
+
+// Default search configuration
+const SEARCH_CONFIG = {
+  matchThreshold: 0.65, // Minimum similarity score (0-1)
+  matchCount: 10, // Max results to return
+};
 
 /**
- * Get all markdown files from the knowledge base recursively
- */
-async function getMarkdownFiles(dir: string): Promise<string[]> {
-  const files: string[] = [];
-  
-  try {
-    const entries = await fs.readdir(dir, { withFileTypes: true });
-    
-    for (const entry of entries) {
-      const fullPath = path.join(dir, entry.name);
-      
-      if (entry.isDirectory()) {
-        const subFiles = await getMarkdownFiles(fullPath);
-        files.push(...subFiles);
-      } else if (entry.isFile() && entry.name.endsWith('.md')) {
-        files.push(fullPath);
-      }
-    }
-  } catch {
-    console.error(`Error reading directory: ${dir}`);
-  }
-  
-  return files;
-}
-
-/**
- * Parse a markdown file and extract frontmatter + content
- */
-async function parseDocument(filePath: string): Promise<QuothDocument | null> {
-  try {
-    const fileContent = await fs.readFile(filePath, 'utf-8');
-    const { data, content } = matter(fileContent);
-    
-    // Validate frontmatter
-    const frontmatter = DocumentFrontmatterSchema.safeParse(data);
-    
-    if (!frontmatter.success) {
-      console.warn(`Invalid frontmatter in ${filePath}:`, frontmatter.error);
-      return null;
-    }
-    
-    // Extract title from first H1 heading
-    const titleMatch = content.match(/^#\s+(.+)$/m);
-    const title = titleMatch ? titleMatch[1].trim() : path.basename(filePath, '.md');
-    
-    return {
-      id: frontmatter.data.id,
-      title,
-      type: frontmatter.data.type,
-      path: filePath,
-      frontmatter: frontmatter.data,
-      content,
-    };
-  } catch (error) {
-    console.error(`Error parsing document ${filePath}:`, error);
-    return null;
-  }
-}
-
-/**
- * Build the search index from all documents
- */
-export async function buildSearchIndex(
-  knowledgeBasePath: string = DEFAULT_CONFIG.knowledgeBasePath
-): Promise<SearchIndex> {
-  // Check cache validity (1 hour)
-  const now = Date.now();
-  if (cachedIndex && now - cacheTimestamp < DEFAULT_CONFIG.cacheRevalidateSeconds * 1000) {
-    return cachedIndex;
-  }
-  
-  const absolutePath = path.resolve(process.cwd(), knowledgeBasePath);
-  const files = await getMarkdownFiles(absolutePath);
-  const documents: DocumentReference[] = [];
-  
-  for (const file of files) {
-    const doc = await parseDocument(file);
-    if (doc) {
-      documents.push({
-        id: doc.id,
-        title: doc.title,
-        type: doc.type,
-        path: path.relative(absolutePath, file),
-        relevance: 1.0,
-      });
-    }
-  }
-  
-  cachedIndex = {
-    documents,
-    lastUpdated: new Date().toISOString(),
-  };
-  cacheTimestamp = now;
-  
-  return cachedIndex;
-}
-
-/**
- * Search documents by query string
- * Uses simple text matching - can be enhanced with vector embeddings later
+ * Search documents using vector similarity
+ * Converts query to embedding, then uses Supabase RPC for cosine similarity search
  */
 export async function searchDocuments(
   query: string,
-  knowledgeBasePath: string = DEFAULT_CONFIG.knowledgeBasePath
+  projectSlug: string = DEFAULT_PROJECT_SLUG
 ): Promise<DocumentReference[]> {
-  const index = await buildSearchIndex(knowledgeBasePath);
-  const queryLower = query.toLowerCase();
-  const terms = queryLower.split(/\s+/).filter(Boolean);
-  
-  const results: DocumentReference[] = [];
-  
-  for (const doc of index.documents) {
-    // Calculate relevance based on term matches
-    let relevance = 0;
-    const searchableText = `${doc.id} ${doc.title} ${doc.type}`.toLowerCase();
-    
-    for (const term of terms) {
-      if (searchableText.includes(term)) {
-        relevance += 1;
-      }
-      // Boost exact ID match
-      if (doc.id.toLowerCase() === term) {
-        relevance += 5;
-      }
-    }
-    
-    if (relevance > 0) {
-      results.push({
-        ...doc,
-        relevance: relevance / terms.length,
-      });
-    }
+  // Validate configuration
+  if (!isSupabaseConfigured()) {
+    throw new Error('Supabase not configured. Set NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY');
   }
-  
-  // Sort by relevance (descending)
-  return results.sort((a, b) => b.relevance - a.relevance);
+
+  if (!isAIConfigured()) {
+    throw new Error('Gemini AI not configured. Set GEMINIAI_API_KEY or GOOGLE_API_KEY');
+  }
+
+  // Get project
+  const project = await getProjectBySlug(projectSlug);
+  if (!project) {
+    throw new Error(`Project "${projectSlug}" not found. Run the indexing script first.`);
+  }
+
+  // Generate embedding for the search query
+  const queryEmbedding = await generateEmbedding(query);
+
+  // Call Supabase RPC function for vector similarity search
+  const { data, error } = await supabase.rpc('match_documents', {
+    query_embedding: queryEmbedding,
+    match_threshold: SEARCH_CONFIG.matchThreshold,
+    match_count: SEARCH_CONFIG.matchCount,
+    filter_project_id: project.id,
+  });
+
+  if (error) {
+    throw new Error(`Search failed: ${error.message}`);
+  }
+
+  // Transform results to DocumentReference format
+  const results: DocumentReference[] = (data as MatchResult[]).map((match) => ({
+    id: match.title, // Use title as the document ID for display
+    title: match.title,
+    type: inferDocumentType(match.file_path),
+    path: match.file_path,
+    relevance: match.similarity,
+    snippet: truncateSnippet(match.content_chunk, 200),
+  }));
+
+  return results;
 }
 
 /**
- * Read a full document by its ID
+ * Read a full document by file path or document ID
  */
 export async function readDocument(
   docId: string,
-  knowledgeBasePath: string = DEFAULT_CONFIG.knowledgeBasePath
+  projectSlug: string = DEFAULT_PROJECT_SLUG
 ): Promise<QuothDocument | null> {
-  const absolutePath = path.resolve(process.cwd(), knowledgeBasePath);
-  const files = await getMarkdownFiles(absolutePath);
-  
-  for (const file of files) {
-    const doc = await parseDocument(file);
-    if (doc && doc.id === docId) {
-      return doc;
-    }
+  if (!isSupabaseConfigured()) {
+    throw new Error('Supabase not configured');
   }
-  
-  return null;
+
+  const project = await getProjectBySlug(projectSlug);
+  if (!project) {
+    return null;
+  }
+
+  // Try to find by file_path or title
+  const { data, error } = await supabase
+    .from('documents')
+    .select('*')
+    .eq('project_id', project.id)
+    .or(`file_path.eq.${docId},title.eq.${docId}`)
+    .single();
+
+  if (error || !data) {
+    // Try partial match on title
+    const { data: partialMatch } = await supabase
+      .from('documents')
+      .select('*')
+      .eq('project_id', project.id)
+      .ilike('title', `%${docId}%`)
+      .limit(1)
+      .single();
+
+    if (!partialMatch) {
+      return null;
+    }
+
+    return transformToQuothDocument(partialMatch);
+  }
+
+  return transformToQuothDocument(data);
 }
 
 /**
- * Get all documents in the knowledge base
+ * Get all documents in the project
  */
 export async function getAllDocuments(
-  knowledgeBasePath: string = DEFAULT_CONFIG.knowledgeBasePath
+  projectSlug: string = DEFAULT_PROJECT_SLUG
 ): Promise<QuothDocument[]> {
-  const absolutePath = path.resolve(process.cwd(), knowledgeBasePath);
-  const files = await getMarkdownFiles(absolutePath);
-  const documents: QuothDocument[] = [];
-  
-  for (const file of files) {
-    const doc = await parseDocument(file);
-    if (doc) {
-      documents.push(doc);
-    }
+  if (!isSupabaseConfigured()) {
+    throw new Error('Supabase not configured');
   }
-  
-  return documents;
+
+  const project = await getProjectBySlug(projectSlug);
+  if (!project) {
+    return [];
+  }
+
+  const { data, error } = await supabase
+    .from('documents')
+    .select('*')
+    .eq('project_id', project.id)
+    .order('file_path');
+
+  if (error || !data) {
+    return [];
+  }
+
+  return data.map(transformToQuothDocument);
+}
+
+/**
+ * Build search index - returns document list for compatibility
+ * In the new architecture, index is pre-built in Supabase
+ */
+export async function buildSearchIndex(projectSlug: string = DEFAULT_PROJECT_SLUG) {
+  const docs = await getAllDocuments(projectSlug);
+
+  return {
+    documents: docs.map((doc) => ({
+      id: doc.id,
+      title: doc.title,
+      type: doc.type,
+      path: doc.path,
+      relevance: 1.0,
+    })),
+    lastUpdated: new Date().toISOString(),
+  };
+}
+
+// ============================================
+// Helper Functions
+// ============================================
+
+/**
+ * Infer document type from file path
+ */
+function inferDocumentType(filePath: string): 'testing-pattern' | 'architecture' | 'contract' | 'meta' {
+  if (filePath.startsWith('patterns/')) return 'testing-pattern';
+  if (filePath.startsWith('architecture/')) return 'architecture';
+  if (filePath.startsWith('contracts/')) return 'contract';
+  if (filePath.startsWith('meta/')) return 'meta';
+  return 'architecture'; // default
+}
+
+/**
+ * Truncate content chunk to create a snippet
+ */
+function truncateSnippet(text: string, maxLength: number): string {
+  if (text.length <= maxLength) return text;
+  return text.slice(0, maxLength).trim() + '...';
+}
+
+/**
+ * Transform Supabase document row to QuothDocument
+ */
+function transformToQuothDocument(row: Record<string, unknown>): QuothDocument {
+  const filePath = row.file_path as string;
+  const title = row.title as string;
+
+  return {
+    id: title,
+    title,
+    type: inferDocumentType(filePath),
+    path: filePath,
+    frontmatter: {
+      id: title,
+      type: inferDocumentType(filePath),
+      status: 'active' as const,
+      last_updated_date: (row.last_updated as string) || new Date().toISOString(),
+    },
+    content: row.content as string,
+  };
+}
+
+// Extended DocumentReference with snippet
+declare module './types' {
+  interface DocumentReference {
+    snippet?: string;
+  }
 }

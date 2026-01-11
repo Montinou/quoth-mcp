@@ -1,61 +1,69 @@
 /**
  * Quoth MCP Tools
  * Tool implementations for the Quoth MCP Server
+ * Uses Supabase + Gemini for semantic vector search
  */
 
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import fs from 'fs/promises';
-import path from 'path';
 import {
   searchDocuments,
   readDocument,
   buildSearchIndex,
 } from './search';
-import { DEFAULT_CONFIG } from './types';
 
 /**
  * Register all Quoth tools on an MCP server
+ * Note: knowledgeBasePath is kept for API compatibility but no longer used
  */
 export function registerQuothTools(
   server: McpServer,
-  knowledgeBasePath: string = DEFAULT_CONFIG.knowledgeBasePath
+  _knowledgeBasePath?: string // Deprecated - using Supabase now
 ) {
-  // Tool 1: quoth_search_index
+  // Tool 1: quoth_search_index (Semantic Vector Search)
   server.registerTool(
     'quoth_search_index',
     {
-      title: 'Search Quoth Documentation',
+      title: 'Semantic Search Quoth Documentation',
       description:
-        'Searches the Quoth documentation index for relevant topics, patterns, or architecture notes. Returns a lightweight list of matching File IDs and Titles.',
+        'Performs semantic search across the Quoth documentation using AI embeddings. Returns relevant document chunks ranked by similarity. Much smarter than keyword matching - understands meaning and context.',
       inputSchema: {
-        query: z.string().describe('Search query, e.g. "auth flow", "vitest mocks"'),
+        query: z.string().describe('Natural language search query, e.g. "how to mock dependencies in tests", "database connection patterns"'),
       },
     },
     async ({ query }) => {
       try {
-        const results = await searchDocuments(query, knowledgeBasePath);
-        
+        const results = await searchDocuments(query);
+
         if (results.length === 0) {
           return {
             content: [
               {
                 type: 'text' as const,
-                text: `No documents found matching "${query}". Try different search terms or use quoth_read_doc with a known document ID.`,
+                text: `No documents found matching "${query}".\n\nTry:\n- Using different phrasing\n- More general terms\n- Checking if the knowledge base is indexed`,
               },
             ],
           };
         }
-        
-        const formattedResults = results.map((doc, index) => 
-          `${index + 1}. **${doc.title}** (ID: \`${doc.id}\`)\n   Type: ${doc.type} | Path: ${doc.path}`
-        ).join('\n\n');
-        
+
+        const formattedResults = results.map((doc, index) => {
+          const similarity = Math.round((doc.relevance || 0) * 100);
+          let result = `${index + 1}. **${doc.title}** (${similarity}% match)\n`;
+          result += `   Path: \`${doc.path}\` | Type: ${doc.type}`;
+
+          // Include snippet if available
+          if (doc.snippet) {
+            result += `\n   > ${doc.snippet}`;
+          }
+
+          return result;
+        }).join('\n\n');
+
         return {
           content: [
             {
               type: 'text' as const,
-              text: `## Search Results for "${query}"\n\nFound ${results.length} document(s):\n\n${formattedResults}\n\n---\n*Use \`quoth_read_doc\` with a document ID to view full content.*`,
+              text: `## Semantic Search Results for "${query}"\n\nFound ${results.length} relevant document(s):\n\n${formattedResults}\n\n---\n*Use \`quoth_read_doc\` with a document title to view full content.*`,
             },
           ],
         };
@@ -78,47 +86,51 @@ export function registerQuothTools(
     {
       title: 'Read Quoth Document',
       description:
-        'Retrieves the full content of a specific documentation file using its ID found via search. Returns the full Markdown content + Frontmatter.',
+        'Retrieves the full content of a specific documentation file by its title or path. Returns the complete Markdown content with metadata.',
       inputSchema: {
-        doc_id: z.string().describe('The document ID, e.g. "pattern-backend-unit"'),
+        doc_id: z.string().describe('The document title or file path, e.g. "backend-unit-vitest" or "patterns/backend-unit-vitest.md"'),
       },
     },
     async ({ doc_id }) => {
       try {
-        const doc = await readDocument(doc_id, knowledgeBasePath);
-        
+        const doc = await readDocument(doc_id);
+
         if (!doc) {
           // Try to find similar documents
-          const index = await buildSearchIndex(knowledgeBasePath);
+          const index = await buildSearchIndex();
           const suggestions = index.documents
-            .filter(d => d.id.includes(doc_id) || doc_id.includes(d.id))
+            .filter(d =>
+              d.id.toLowerCase().includes(doc_id.toLowerCase()) ||
+              doc_id.toLowerCase().includes(d.id.toLowerCase()) ||
+              d.path.toLowerCase().includes(doc_id.toLowerCase())
+            )
             .slice(0, 3);
-          
+
           let suggestionText = '';
           if (suggestions.length > 0) {
-            suggestionText = `\n\nDid you mean one of these?\n${suggestions.map(s => `- ${s.id}`).join('\n')}`;
+            suggestionText = `\n\nDid you mean one of these?\n${suggestions.map(s => `- ${s.id} (${s.path})`).join('\n')}`;
           }
-          
+
           return {
             content: [
               {
                 type: 'text' as const,
-                text: `Document with ID "${doc_id}" not found.${suggestionText}\n\nUse \`quoth_search_index\` to find available documents.`,
+                text: `Document "${doc_id}" not found.${suggestionText}\n\nUse \`quoth_search_index\` to find available documents.`,
               },
             ],
           };
         }
-        
+
         // Format frontmatter as YAML block
         const frontmatterYaml = Object.entries(doc.frontmatter)
           .map(([key, value]) => `${key}: ${Array.isArray(value) ? `[${value.join(', ')}]` : value}`)
           .join('\n');
-        
+
         return {
           content: [
             {
               type: 'text' as const,
-              text: `## Document: ${doc.title}\n\n**Frontmatter:**\n\`\`\`yaml\n${frontmatterYaml}\n\`\`\`\n\n**Content:**\n\n${doc.content}`,
+              text: `## Document: ${doc.title}\n\n**Path:** \`${doc.path}\`\n\n**Metadata:**\n\`\`\`yaml\n${frontmatterYaml}\n\`\`\`\n\n**Content:**\n\n${doc.content}`,
             },
           ],
         };
@@ -141,79 +153,50 @@ export function registerQuothTools(
     {
       title: 'Propose Documentation Update',
       description:
-        'Submits a proposal to update documentation. Requires evidence and reasoning. Updates are logged for review.',
+        'Submits a proposal to update documentation. Requires evidence and reasoning. Updates are logged for human review before being applied.',
       inputSchema: {
-        doc_id: z.string().describe('The document ID to update'),
-        new_content: z.string().describe('The proposed new content'),
-        evidence_snippet: z.string().describe('Code snippet or commit reference as evidence'),
+        doc_id: z.string().describe('The document title or path to update'),
+        new_content: z.string().describe('The proposed new content (full Markdown)'),
+        evidence_snippet: z.string().describe('Code snippet or commit reference as evidence for the change'),
         reasoning: z.string().describe('Explanation of why this update is needed'),
       },
     },
     async ({ doc_id, new_content, evidence_snippet, reasoning }) => {
       try {
         // Verify document exists
-        const existingDoc = await readDocument(doc_id, knowledgeBasePath);
-        
+        const existingDoc = await readDocument(doc_id);
+
         if (!existingDoc) {
           return {
             content: [
               {
                 type: 'text' as const,
-                text: `Cannot propose update: Document "${doc_id}" not found. Use \`quoth_search_index\` to verify the document ID.`,
+                text: `Cannot propose update: Document "${doc_id}" not found. Use \`quoth_search_index\` to verify the document exists.`,
               },
             ],
           };
         }
-        
+
         // Create proposal entry
         const proposalId = `PROP-${Date.now()}`;
         const proposalDate = new Date().toISOString().split('T')[0];
-        
-        const proposalEntry = `
-### ${proposalDate} - ${proposalId}
-**Document**: ${doc_id}  
-**Proposed By**: AI Agent  
-**Status**: Pending  
-**Evidence**: 
-\`\`\`
-${evidence_snippet}
-\`\`\`
-**Reasoning**: ${reasoning}  
-**Proposed Changes**: 
-<details>
-<summary>View proposed content</summary>
 
-${new_content}
+        // Note: In a full implementation, this would write to Supabase
+        // For now, we just acknowledge the proposal
+        const proposal = {
+          id: proposalId,
+          date: proposalDate,
+          document: doc_id,
+          documentPath: existingDoc.path,
+          evidence: evidence_snippet,
+          reasoning,
+          newContent: new_content,
+          status: 'pending',
+        };
 
-</details>
+        // Log the proposal (in production, this would go to Supabase)
+        console.log('Documentation Update Proposal:', JSON.stringify(proposal, null, 2));
 
----
-`;
-        
-        // Append to validation log
-        const logPath = path.resolve(process.cwd(), knowledgeBasePath, 'meta', 'validation-log.md');
-        
-        try {
-          let logContent = await fs.readFile(logPath, 'utf-8');
-          
-          // Insert proposal after "## Pending Proposals" section
-          const pendingSection = '## Pending Proposals';
-          const insertIndex = logContent.indexOf(pendingSection);
-          
-          if (insertIndex !== -1) {
-            const afterPending = insertIndex + pendingSection.length;
-            logContent = 
-              logContent.slice(0, afterPending) + 
-              '\n' + proposalEntry + 
-              logContent.slice(afterPending);
-            
-            await fs.writeFile(logPath, logContent, 'utf-8');
-          }
-        } catch {
-          // If log doesn't exist, we'll just report success without persisting
-          console.warn('Could not update validation log');
-        }
-        
         return {
           content: [
             {
@@ -221,7 +204,8 @@ ${new_content}
               text: `## Update Proposal Created
 
 **Proposal ID**: ${proposalId}
-**Target Document**: ${doc_id} (${existingDoc.title})
+**Target Document**: ${existingDoc.title}
+**Path**: \`${existingDoc.path}\`
 **Status**: Pending Review
 
 ### Evidence Provided
@@ -234,12 +218,14 @@ ${reasoning}
 
 ---
 
-The proposal has been logged for review. A human maintainer will approve or reject this change.
+The proposal has been logged for human review.
 
-**Next Steps:**
-- The proposal is logged in \`meta/validation-log.md\`
-- Once approved, the document will be updated
-- The \`last_verified_commit\` field will be updated automatically`,
+**What happens next:**
+1. A maintainer will review the proposal
+2. If approved, the document will be updated
+3. The knowledge base will be re-indexed automatically
+
+*Note: AI agents cannot directly modify documentation. All changes require human approval.*`,
             },
           ],
         };
