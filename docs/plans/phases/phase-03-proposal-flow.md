@@ -1,3 +1,28 @@
+# Phase 3: Proposal Flow Modification
+
+**Status:** 🔴 Not Started  
+**Risk Level:** Medium  
+**Estimated Time:** 1 hour  
+**Dependencies:** Phase 1, Phase 2 complete
+
+---
+
+## Overview
+
+Modify `quoth_propose_update` to support:
+1. **Configurable approval** - Check `project.require_approval` flag
+2. **Direct apply mode** - If no approval required, save directly to documents
+3. **Incremental re-indexing** - Use chunk hashes to minimize embedding calls
+
+---
+
+## Files to Modify
+
+### [MODIFY] src/lib/sync.ts
+
+**Complete replacement** with incremental re-indexing:
+
+```typescript
 import { createHash } from "crypto";
 import { supabase, type Document } from "./supabase";
 import { generateEmbedding } from "./ai";
@@ -11,12 +36,9 @@ export function calculateChecksum(content: string): string {
 
 /**
  * Chunk markdown content by H2 headers
- * Each chunk includes the H2 title for context
  */
 export function chunkByHeaders(content: string, minChunkLength: number = 50): string[] {
-  // Split by H2 headers (## )
   const chunks = content.split(/^## /gm);
-
   return chunks
     .map((chunk) => chunk.trim())
     .filter((chunk) => chunk.length >= minChunkLength);
@@ -131,68 +153,110 @@ export async function syncDocument(
   };
 }
 
-/**
- * Delete a document and its embeddings
- */
-export async function deleteDocument(
-  projectId: string,
-  filePath: string
-): Promise<boolean> {
-  const { error } = await supabase
-    .from("documents")
-    .delete()
-    .eq("project_id", projectId)
-    .eq("file_path", filePath);
+// Keep other functions: deleteDocument, getSyncStatus
+```
 
-  return !error;
-}
+---
 
-/**
- * Get sync status for a project
- */
-export async function getSyncStatus(projectId: string): Promise<{
-  documentCount: number;
-  embeddingCount: number;
-  lastSync: string | null;
-}> {
-  const { count: docCount } = await supabase
-    .from("documents")
-    .select("*", { count: "exact", head: true })
-    .eq("project_id", projectId);
+### [MODIFY] src/lib/quoth/tools.ts
 
-  const { data: docs } = await supabase
-    .from("documents")
-    .select("id")
-    .eq("project_id", projectId);
+**Update `quoth_propose_update` handler** to support configurable approval:
 
-  let embeddingCount = 0;
-  let lastSync: string | null = null;
+```typescript
+// In the quoth_propose_update handler, ADD this logic after auth checks:
 
-  if (docs && docs.length > 0) {
-    const docIds = docs.map((d) => d.id);
+// Get project settings
+const { data: project } = await supabase
+  .from('projects')
+  .select('require_approval')
+  .eq('id', authContext.project_id)
+  .single();
 
-    const { count } = await supabase
-      .from("document_embeddings")
-      .select("*", { count: "exact", head: true })
-      .in("document_id", docIds);
-
-    embeddingCount = count || 0;
-
-    // Get most recent update
-    const { data: latest } = await supabase
-      .from("documents")
-      .select("last_updated")
-      .eq("project_id", projectId)
-      .order("last_updated", { ascending: false })
-      .limit(1)
-      .single();
-
-    lastSync = latest?.last_updated || null;
-  }
+// DIRECT APPLY MODE (no approval required)
+if (project && !project.require_approval) {
+  const { document, chunksIndexed, chunksReused } = await syncDocument(
+    authContext.project_id,
+    existingDoc.path,
+    existingDoc.title,
+    new_content
+  );
 
   return {
-    documentCount: docCount || 0,
-    embeddingCount,
-    lastSync,
+    content: [{
+      type: 'text' as const,
+      text: `## ✅ Documentation Updated Directly
+
+**Document**: ${existingDoc.title}
+**Path**: \`${existingDoc.path}\`
+**Version**: ${document.version}
+
+### Indexing Stats
+- Chunks re-indexed: ${chunksIndexed}
+- Chunks reused (cached): ${chunksReused}
+- Token savings: ${chunksReused > 0 ? Math.round((chunksReused / (chunksIndexed + chunksReused)) * 100) : 0}%
+
+---
+*Changes applied immediately. Previous version preserved in history.*`,
+    }],
   };
 }
+
+// APPROVAL REQUIRED MODE (existing flow continues below)
+// ... existing proposal creation code ...
+```
+
+**Update success message** in existing proposal flow (lines 247-254):
+```diff
+- 2. If approved, changes are committed to GitHub
+- 3. The knowledge base is re-indexed automatically
++ 2. If approved, changes are saved directly to the knowledge base
++ 3. Previous version automatically preserved in history
++ 4. Vector embeddings regenerated (incrementally)
+```
+
+---
+
+## Step-by-Step Instructions
+
+### Step 3.1: Update sync.ts
+
+1. Open `src/lib/sync.ts`
+2. Replace the `syncDocument` function with the new incremental version
+3. Keep other existing functions (`deleteDocument`, `getSyncStatus`)
+
+### Step 3.2: Update tools.ts
+
+1. Open `src/lib/quoth/tools.ts`
+2. Add import at top:
+   ```typescript
+   import { syncDocument } from '../sync';
+   ```
+3. In `quoth_propose_update` handler, after line `const existingDoc = await readDocument(...)`:
+   - Add project lookup
+   - Add conditional direct apply mode
+4. Update existing proposal success message text
+
+### Step 3.3: Verify Build
+
+```bash
+npm run build
+```
+
+---
+
+## Checklist
+
+- [ ] Update `src/lib/sync.ts` with incremental re-indexing
+- [ ] Add `syncDocument` import to `tools.ts`
+- [ ] Add project `require_approval` check to `quoth_propose_update`
+- [ ] Add direct apply mode branch
+- [ ] Update approval mode message text
+- [ ] Run `npm run build` - no errors
+- [ ] Update [status.md](./status.md) - mark Phase 3 complete
+- [ ] Commit changes: `git commit -m "Phase 3: Proposal flow with incremental indexing"`
+
+---
+
+## Next Phase
+
+Proceed to [Phase 4: GitHub Removal](./phase-04-github-removal.md).

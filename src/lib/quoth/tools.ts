@@ -14,6 +14,8 @@ import {
   buildSearchIndex,
 } from './search';
 import { supabase } from '../supabase';
+import { registerGenesisTools } from './genesis';
+import { syncDocument } from '../sync';
 
 /**
  * Register all Quoth tools on an MCP server with authentication context
@@ -197,7 +199,43 @@ export function registerQuothTools(
           };
         }
 
-        // 3. Insert proposal into Supabase
+        // 3. Get project settings for approval mode
+        const { data: project } = await supabase
+          .from('projects')
+          .select('require_approval')
+          .eq('id', authContext.project_id)
+          .single();
+
+        // 4. DIRECT APPLY MODE (no approval required)
+        if (project && !project.require_approval) {
+          const { document, chunksIndexed, chunksReused } = await syncDocument(
+            authContext.project_id,
+            existingDoc.path,
+            existingDoc.title,
+            new_content
+          );
+
+          return {
+            content: [{
+              type: 'text' as const,
+              text: `## ✅ Documentation Updated Directly
+
+**Document**: ${existingDoc.title}
+**Path**: \`${existingDoc.path}\`
+**Version**: ${document.version || 'N/A'}
+
+### Indexing Stats
+- Chunks re-indexed: ${chunksIndexed}
+- Chunks reused (cached): ${chunksReused}
+- Token savings: ${chunksReused > 0 ? Math.round((chunksReused / (chunksIndexed + chunksReused)) * 100) : 0}%
+
+---
+*Changes applied immediately. Previous version preserved in history.*`,
+            }],
+          };
+        }
+
+        // 5. APPROVAL REQUIRED MODE - Insert proposal into Supabase
         const { data: proposal, error } = await supabase
           .from('document_proposals')
           .insert({
@@ -217,7 +255,7 @@ export function registerQuothTools(
           throw new Error(`Failed to create proposal: ${error.message}`);
         }
 
-        // 4. Return success with dashboard link
+        // 6. Return success with dashboard link
         const dashboardUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
 
         return {
@@ -247,9 +285,9 @@ The proposal has been logged for human review. A maintainer will review and appr
 
 **What happens next:**
 1. Human reviewer examines the proposal in the dashboard
-2. If approved, changes are committed to GitHub
-3. The knowledge base is re-indexed automatically
-4. Email notification sent to tech leads
+2. If approved, changes are saved directly to the knowledge base
+3. Previous version automatically preserved in history
+4. Vector embeddings regenerated (incrementally)
 
 *All documentation changes require human approval before being applied.*`,
             },
@@ -267,4 +305,7 @@ The proposal has been logged for human review. A maintainer will review and appr
       }
     }
   );
+
+  // Register Genesis tools
+  registerGenesisTools(server, authContext);
 }
