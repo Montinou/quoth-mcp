@@ -42,14 +42,20 @@ export async function GET(req: Request) {
   }
 
   // Encode OAuth state as JWT (works on serverless!)
-  const oauthStateToken = await encodeState({
-    code_challenge: codeChallenge,
-    code_challenge_method: codeChallengeMethod,
-    client_id: clientId,
-    redirect_uri: redirectUri,
-    scope: scope || undefined,
-    created_at: Date.now(),
-  });
+  let oauthStateToken: string;
+  try {
+    oauthStateToken = await encodeState({
+      code_challenge: codeChallenge,
+      code_challenge_method: codeChallengeMethod,
+      client_id: clientId,
+      redirect_uri: redirectUri,
+      scope: scope || undefined,
+      created_at: Date.now(),
+    });
+  } catch (error) {
+    console.error('OAuth authorize error:', error);
+    return errorResponse('server_error', 'Failed to generate OAuth state. Check server configuration.');
+  }
 
   // Build the login page URL with encoded state
   const loginUrl = new URL(`${APP_URL}/auth/oauth-login`);
