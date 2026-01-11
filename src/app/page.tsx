@@ -5,6 +5,7 @@
 "use client";
 
 import { Database, ShieldAlert, History } from "lucide-react";
+import Link from "next/link";
 import { Navbar, Footer, GlassCard } from "@/components/quoth";
 import { Button } from "@/components/ui/button";
 import {
@@ -95,13 +96,20 @@ const Hero = () => (
         <Button
           variant="glass"
           size="lg"
-          className="bg-violet-spectral/10 border-violet-spectral/50 hover:bg-violet-spectral/20 w-full sm:w-auto"
+          className="bg-violet-spectral/10 border-violet-spectral/50 hover:bg-violet-spectral/20 w-full sm:w-auto group"
+          asChild
         >
-          Deploy Quoth Server
+          <Link href="/auth/signup">
+            Get Started Free
+            <span className="group-hover:translate-x-1 transition-transform ml-2">→</span>
+          </Link>
         </Button>
-        <button className="px-8 py-4 text-gray-400 hover:text-white transition-colors text-sm tracking-wide uppercase border-b border-transparent hover:border-white w-full sm:w-auto">
+        <Link
+          href="/protocol"
+          className="px-8 py-4 text-gray-400 hover:text-white transition-colors text-sm tracking-wide uppercase border-b border-transparent hover:border-white w-full sm:w-auto text-center"
+        >
           Read the Protocol
-        </button>
+        </Link>
       </div>
 
       <CodeDemo />

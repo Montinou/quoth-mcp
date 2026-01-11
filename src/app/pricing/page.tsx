@@ -1,6 +1,8 @@
 "use client";
 
+import Link from "next/link";
 import { Navbar, Footer, PageHeader, PricingCard } from "@/components/quoth";
+import { Button } from "@/components/ui/button";
 import {
   Accordion,
   AccordionContent,
@@ -23,6 +25,7 @@ const tiers = [
       { text: "Priority support", included: false },
     ],
     cta: "Get Started",
+    ctaHref: "/auth/signup",
     highlighted: false,
   },
   {
@@ -39,6 +42,7 @@ const tiers = [
       { text: "Priority support", included: false },
     ],
     cta: "Start Pro Trial",
+    ctaHref: "/auth/signup",
     highlighted: true,
     badge: "Popular",
   },
@@ -56,6 +60,7 @@ const tiers = [
       { text: "SLA guarantee", included: true },
     ],
     cta: "Contact Sales",
+    ctaHref: "mailto:hello@quoth.ai-innovation.site",
     highlighted: false,
   },
 ];
@@ -158,9 +163,16 @@ export default function PricingPage() {
               Start with our free tier and upgrade as your documentation needs
               grow. No credit card required.
             </p>
-            <button className="glass-btn bg-violet-spectral/10 border-violet-spectral/50 text-white px-8 py-4 rounded-sm hover:bg-violet-spectral/20">
-              Deploy Quoth Server
-            </button>
+            <Button
+              variant="glass"
+              size="lg"
+              className="bg-violet-spectral/10 border-violet-spectral/50 hover:bg-violet-spectral/20"
+              asChild
+            >
+              <Link href="/auth/signup">
+                Get Started Free
+              </Link>
+            </Button>
           </div>
         </div>
       </section>

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { Check } from "lucide-react";
 import { Card, CardHeader, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -18,6 +19,7 @@ interface PricingCardProps {
   period?: string;
   features: PricingFeature[];
   cta: string;
+  ctaHref?: string;
   highlighted?: boolean;
   badge?: string;
   className?: string;
@@ -31,6 +33,7 @@ export function PricingCard({
   period = "/month",
   features,
   cta,
+  ctaHref,
   highlighted = false,
   badge,
   className,
@@ -109,8 +112,13 @@ export function PricingCard({
               ? "bg-violet-spectral hover:bg-violet-glow"
               : "border-white/10 hover:border-violet-spectral/50"
           )}
+          asChild={!!ctaHref}
         >
-          {cta}
+          {ctaHref ? (
+            <Link href={ctaHref}>{cta}</Link>
+          ) : (
+            cta
+          )}
         </Button>
       </CardFooter>
     </Card>
