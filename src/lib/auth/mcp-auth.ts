@@ -20,6 +20,45 @@ export interface AuthContext {
 }
 
 /**
+ * Verify an MCP API key (custom JWT token)
+ * Returns AuthContext if valid, null otherwise
+ */
+export async function verifyMcpApiKey(token: string): Promise<AuthContext | null> {
+  if (!process.env.JWT_SECRET) {
+    return null;
+  }
+
+  try {
+    const secret = new TextEncoder().encode(process.env.JWT_SECRET);
+    const { payload } = await jwtVerify(token, secret, {
+      issuer: process.env.NEXT_PUBLIC_APP_URL || 'https://quoth.ai-innovation.site',
+      audience: 'mcp-server',
+    });
+
+    const authContext: AuthContext = {
+      project_id: payload.sub as string,
+      user_id: payload.user_id as string,
+      role: payload.role as 'admin' | 'editor' | 'viewer',
+      label: payload.label as string | undefined,
+    };
+
+    // Validate required fields
+    if (!authContext.project_id || !authContext.user_id || !authContext.role) {
+      return null;
+    }
+
+    // Validate role
+    if (!['admin', 'editor', 'viewer'].includes(authContext.role)) {
+      return null;
+    }
+
+    return authContext;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Creates an authenticated MCP handler
  * Extracts and verifies JWT token before allowing access to MCP tools
  *

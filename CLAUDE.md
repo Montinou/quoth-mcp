@@ -45,11 +45,14 @@ After authentication, you get:
 If you prefer manual setup:
 
 ```bash
-# Generate token from dashboard
-# Then configure Claude Code directly:
+# Option 1: Streamable HTTP (header auth)
 claude mcp add quoth --type http \
   --url "https://quoth.ai-innovation.site/api/mcp" \
   --header "Authorization: Bearer YOUR_TOKEN"
+
+# Option 2: SSE Transport (query param auth - for EventSource clients)
+claude mcp add quoth --type sse \
+  --url "https://quoth.ai-innovation.site/api/mcp/sse?token=YOUR_TOKEN"
 ```
 
 ### CLI Commands
@@ -107,7 +110,8 @@ The core MCP implementation exposes 4 tools and 2 prompts:
 
 ### API Routes
 
-- `src/app/api/[transport]/route.ts` - Authenticated MCP endpoint at `/api/mcp` (requires JWT token)
+- `src/app/api/[transport]/route.ts` - Authenticated MCP endpoint at `/api/mcp` (requires JWT token in header)
+- `src/app/api/mcp/sse/route.ts` - SSE transport at `/api/mcp/sse` (supports query param token for EventSource)
 - `src/app/api/mcp/public/route.ts` - Public demo MCP endpoint at `/api/mcp/public` (no auth, read-only)
 
 ### Knowledge Base (quoth-knowledge-base/)
