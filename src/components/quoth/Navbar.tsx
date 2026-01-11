@@ -104,6 +104,13 @@ export function Navbar({
                         Dashboard
                       </Link>
                       <Link
+                        href="/knowledge-base"
+                        className="block px-4 py-2 hover:bg-white/5 transition-colors"
+                        onClick={() => setDropdownOpen(false)}
+                      >
+                        Knowledge Base
+                      </Link>
+                      <Link
                         href="/proposals"
                         className="block px-4 py-2 hover:bg-white/5 transition-colors"
                         onClick={() => setDropdownOpen(false)}
