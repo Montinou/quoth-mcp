@@ -22,19 +22,40 @@ export interface AuthContext {
 /**
  * Verify an MCP API key (custom JWT token)
  * Returns AuthContext if valid, null otherwise
+ * Now also handles OAuth-issued tokens (type: 'mcp')
  */
 export async function verifyMcpApiKey(token: string): Promise<AuthContext | null> {
-  if (!process.env.JWT_SECRET) {
+  // Try JWT_SECRET first, fall back to SUPABASE_JWT_SECRET
+  const jwtSecret = process.env.JWT_SECRET || process.env.SUPABASE_JWT_SECRET;
+  if (!jwtSecret) {
+    console.error('No JWT_SECRET or SUPABASE_JWT_SECRET configured');
     return null;
   }
 
   try {
-    const secret = new TextEncoder().encode(process.env.JWT_SECRET);
+    const secret = new TextEncoder().encode(jwtSecret);
     const { payload } = await jwtVerify(token, secret, {
       issuer: process.env.NEXT_PUBLIC_APP_URL || 'https://quoth.ai-innovation.site',
       audience: 'mcp-server',
     });
 
+    // Handle OAuth-issued tokens (type: 'mcp')
+    if (payload.type === 'mcp') {
+      const authContext: AuthContext = {
+        project_id: payload.sub as string,
+        user_id: payload.user_id as string,
+        role: (payload.role as 'admin' | 'editor' | 'viewer') || 'viewer',
+        label: payload.email as string | undefined,
+      };
+
+      if (!authContext.project_id || !authContext.user_id) {
+        return null;
+      }
+
+      return authContext;
+    }
+
+    // Handle regular MCP API key tokens
     const authContext: AuthContext = {
       project_id: payload.sub as string,
       user_id: payload.user_id as string,
@@ -53,7 +74,8 @@ export async function verifyMcpApiKey(token: string): Promise<AuthContext | null
     }
 
     return authContext;
-  } catch {
+  } catch (error) {
+    // Token verification failed
     return null;
   }
 }
