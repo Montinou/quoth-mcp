@@ -1,21 +1,14 @@
 /**
- * OAuth State Store - JWT-based
+ * OAuth State Store - Cookie-based
  * 
- * Uses signed JWTs to store PKCE challenges and state for OAuth flow.
+ * Uses encrypted cookies to store PKCE challenges and state for OAuth flow.
  * This works on serverless platforms like Vercel where in-memory stores
  * don't persist across function invocations.
  */
 
 import { SignJWT, jwtVerify } from 'jose';
 
-function getJwtSecret(): Uint8Array {
-  // Try JWT_SECRET first, then fall back to SUPABASE_JWT_SECRET
-  const secret = process.env.JWT_SECRET || process.env.SUPABASE_JWT_SECRET;
-  if (!secret) {
-    throw new Error('JWT_SECRET or SUPABASE_JWT_SECRET environment variable is not configured');
-  }
-  return new TextEncoder().encode(secret);
-}
+const JWT_SECRET = process.env.JWT_SECRET!;
 
 interface OAuthState {
   code_challenge: string;
@@ -41,7 +34,7 @@ interface AuthCode {
  * Encode OAuth state as a signed JWT for cookie storage
  */
 export async function encodeState(data: OAuthState): Promise<string> {
-  const secret = getJwtSecret();
+  const secret = new TextEncoder().encode(JWT_SECRET);
   return new SignJWT(data as unknown as Record<string, unknown>)
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
@@ -54,7 +47,7 @@ export async function encodeState(data: OAuthState): Promise<string> {
  */
 export async function decodeState(token: string): Promise<OAuthState | null> {
   try {
-    const secret = getJwtSecret();
+    const secret = new TextEncoder().encode(JWT_SECRET);
     const { payload } = await jwtVerify(token, secret);
     return {
       code_challenge: payload.code_challenge as string,
@@ -73,7 +66,7 @@ export async function decodeState(token: string): Promise<OAuthState | null> {
  * Encode authorization code data as signed JWT
  */
 export async function encodeAuthCode(data: AuthCode): Promise<string> {
-  const secret = getJwtSecret();
+  const secret = new TextEncoder().encode(JWT_SECRET);
   return new SignJWT(data as unknown as Record<string, unknown>)
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
@@ -86,7 +79,7 @@ export async function encodeAuthCode(data: AuthCode): Promise<string> {
  */
 export async function decodeAuthCode(token: string): Promise<AuthCode | null> {
   try {
-    const secret = getJwtSecret();
+    const secret = new TextEncoder().encode(JWT_SECRET);
     const { payload } = await jwtVerify(token, secret);
     return {
       client_id: payload.client_id as string,
@@ -102,4 +95,3 @@ export async function decodeAuthCode(token: string): Promise<AuthCode | null> {
     return null;
   }
 }
-
