@@ -15,6 +15,9 @@ npm run dev      # Start Next.js development server
 npm run build    # Production build
 npm run start    # Start production server
 npm run lint     # Run ESLint
+
+# Indexing (after adding new docs to quoth-knowledge-base/)
+npx tsx scripts/index-knowledge-base.ts
 ```
 
 ## Architecture
@@ -24,8 +27,8 @@ npm run lint     # Run ESLint
 The core MCP implementation exposes 3 tools and 2 prompts:
 
 **Tools:**
-- `quoth_search_index` - Searches documentation by topic, returns document IDs
-- `quoth_read_doc` - Retrieves full document content by ID
+- `quoth_search_index` - Semantic vector search using Gemini embeddings (768 dimensions)
+- `quoth_read_doc` - Retrieves full document content from Supabase
 - `quoth_propose_update` - Submits documentation update proposals with evidence
 
 **Prompts (Personas):**
@@ -67,10 +70,38 @@ Uses CSS-first configuration with `@theme` directive in `globals.css`:
 - Colors: `obsidian`, `charcoal`, `graphite`, `violet-spectral`, `violet-glow`, `violet-ghost`
 - Custom utilities: `.glass-panel`, `.glass-btn`, `.drift-highlight`, `.card-glow`
 
+## Vector Search Architecture
+
+Quoth uses Supabase + Gemini for semantic search:
+
+**Storage (Supabase):**
+- `projects` - Multi-tenant project support
+- `documents` - Markdown content with checksums
+- `document_embeddings` - 768-dimension vectors from Gemini
+
+**Embedding (Gemini):**
+- Model: `text-embedding-004` (768 dimensions)
+- Chunking: Split by H2 headers
+- Rate limit: 15 RPM (4s delay between requests)
+
+**Search Flow:**
+1. User query → Gemini embedding
+2. Supabase `match_documents` RPC (cosine similarity)
+3. Return ranked results with snippets
+
+**Environment Variables:**
+```
+NEXT_PUBLIC_SUPABASE_URL=https://xxx.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=eyJ...
+GEMINIAI_API_KEY=AIza...
+```
+
 ## Key Dependencies
 
 - `@modelcontextprotocol/sdk` - MCP protocol implementation
 - `mcp-handler` - MCP server handler for Next.js
+- `@supabase/supabase-js` - Supabase client for vector storage
+- `@google/generative-ai` - Gemini embeddings
 - `gray-matter` - YAML frontmatter parsing
 - `zod` - Schema validation
 - `lucide-react` - Icons (1.5px stroke weight per branding)
