@@ -39,30 +39,57 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [profileError, setProfileError] = useState<string | null>(null);
-  const supabase = createClient();
+
+  // Create supabase client once and memoize it
+  const [supabase] = useState(() => createClient());
 
   useEffect(() => {
+    let ignore = false;
+
     // Initialize auth state
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
+    const initAuth = async () => {
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession();
 
-      if (process.env.NODE_ENV === 'development') {
-        console.log('[AuthContext] Session initialized:', {
-          hasSession: !!session,
-          hasUser: !!session?.user
-        });
-      }
+        if (error) {
+          console.error('[AuthContext] Session error:', error);
+          if (!ignore) {
+            setLoading(false);
+          }
+          return;
+        }
 
-      if (session?.user) {
-        fetchProfile(session.user.id);
+        if (!ignore) {
+          setSession(session);
+          setUser(session?.user ?? null);
+
+          if (process.env.NODE_ENV === 'development') {
+            console.log('[AuthContext] Session initialized:', {
+              hasSession: !!session,
+              hasUser: !!session?.user
+            });
+          }
+
+          if (session?.user) {
+            await fetchProfile(session.user.id);
+          }
+          setLoading(false);
+        }
+      } catch (err) {
+        console.error('[AuthContext] Init error:', err);
+        if (!ignore) {
+          setLoading(false);
+        }
       }
-      setLoading(false);
-    });
+    };
+
+    initAuth();
 
     // Listen for auth changes (with cleanup)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
+        if (ignore) return;
+
         if (process.env.NODE_ENV === 'development') {
           console.log('[AuthContext] Auth state changed:', {
             event,
@@ -82,17 +109,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     );
 
-    // CRITICAL: Cleanup subscription
-    return () => subscription.unsubscribe();
+    // CRITICAL: Cleanup
+    return () => {
+      ignore = true;
+      subscription.unsubscribe();
+    };
   }, [supabase]);
 
   // Refresh session when window gains focus
   useEffect(() => {
-    const handleFocus = () => {
+    const handleFocus = async () => {
       if (process.env.NODE_ENV === 'development') {
         console.log('[AuthContext] Window focused, refreshing session');
       }
-      supabase.auth.getSession();
+      try {
+        await supabase.auth.getSession();
+      } catch (err) {
+        console.error('[AuthContext] Focus refresh error:', err);
+      }
     };
 
     window.addEventListener('focus', handleFocus);
