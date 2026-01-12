@@ -46,47 +46,45 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     let mounted = true;
 
-    // Initialize auth state with timeout to prevent infinite loading
+    // Initialize auth state - optimized for fast anonymous experience
     const initAuth = async () => {
       try {
-        // Add timeout to prevent hanging - 5 seconds max
-        const timeoutPromise = new Promise<{ data: { user: null }, error: Error }>((_, reject) =>
-          setTimeout(() => reject(new Error('Auth timeout')), 5000)
-        );
-
-        // Use getUser() which validates JWT with Supabase Auth server
-        const result = await Promise.race([
-          supabase.auth.getUser(),
-          timeoutPromise
-        ]);
+        // Step 1: Quick local check (no network request)
+        // getSession() reads from cookies/storage - instant
+        const { data: { session: localSession } } = await supabase.auth.getSession();
 
         if (!mounted) return;
 
-        const { data: { user }, error } = result;
-
-        if (error) {
-          // No valid session (expected on pages without auth)
+        // No local session = definitely not logged in, done instantly
+        if (!localSession) {
           setLoading(false);
           return;
         }
 
-        if (user) {
-          setUser(user);
-          // Get session for convenience (already validated by getUser above)
-          const { data: { session } } = await supabase.auth.getSession();
+        // Step 2: We have a local session, validate it with server
+        // This also handles token refresh automatically
+        const { data: { user }, error } = await supabase.auth.getUser();
 
-          if (mounted) {
-            setSession(session);
-            await fetchProfile(user.id);
-          }
+        if (!mounted) return;
+
+        if (error || !user) {
+          // Session was invalid/expired and couldn't refresh
+          // Clear local state and continue as anonymous
+          setLoading(false);
+          return;
         }
+
+        // Valid session - set user and fetch profile
+        setUser(user);
+        setSession(localSession);
+        await fetchProfile(user.id);
 
         if (mounted) {
           setLoading(false);
         }
       } catch (err) {
-        console.error('[AuthContext] Auth init error (may be timeout):', err);
-        // On error or timeout, just assume no session and continue
+        console.error('[AuthContext] Auth init error:', err);
+        // On error, assume no session and continue
         if (mounted) {
           setLoading(false);
         }
