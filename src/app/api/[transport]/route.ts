@@ -5,21 +5,20 @@
  * Endpoint: /api/mcp (Streamable HTTP) or /api/sse (SSE)
  *
  * Features:
- * - OAuth 2.1 authentication via Supabase Auth or MCP API keys
+ * - OAuth 2.1 authentication via MCP API keys or OAuth tokens
  * - Proper WWW-Authenticate headers for OAuth discovery
  * - 3 Tools: quoth_search_index, quoth_read_doc, quoth_propose_update
  * - 2 Prompts: quoth_architect, quoth_auditor
  *
  * Authentication:
  * - Requires Bearer token in Authorization header
- * - Token can be Supabase session token or MCP API key
+ * - Token can be MCP API key or OAuth-issued token
  * - Returns 401 with resource_metadata URL for OAuth discovery
  */
 
 import { createMcpHandler, withMcpAuth } from 'mcp-handler';
 import { registerQuothTools } from '@/lib/quoth/tools';
 import { getArchitectPrompt, getAuditorPrompt } from '@/lib/quoth/prompts';
-import { verifySupabaseToken } from '@/lib/auth/oauth-auth';
 import { verifyMcpApiKey, type AuthContext } from '@/lib/auth/mcp-auth';
 import type { AuthInfo } from '@modelcontextprotocol/sdk/server/auth/types.js';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
@@ -27,14 +26,14 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://quoth.ai-innovation.site';
 
 /**
- * Combined token verification: tries MCP API key first, then Supabase token
+ * Token verification: handles both MCP API keys and OAuth tokens
  */
 async function verifyToken(req: Request, bearerToken?: string): Promise<AuthInfo | undefined> {
   if (!bearerToken) {
     return undefined;
   }
 
-  // Try MCP API key (custom JWT) first
+  // verifyMcpApiKey now handles both MCP API keys and OAuth tokens
   const mcpAuth = await verifyMcpApiKey(bearerToken);
   if (mcpAuth) {
     return {
@@ -51,8 +50,7 @@ async function verifyToken(req: Request, bearerToken?: string): Promise<AuthInfo
     };
   }
 
-  // Fall back to Supabase session token
-  return verifySupabaseToken(req, bearerToken);
+  return undefined;
 }
 
 /**

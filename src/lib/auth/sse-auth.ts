@@ -33,7 +33,7 @@ function extractToken(req: NextRequest): string | null {
 
 /**
  * Verifies JWT token and returns auth context
- * Reuses the same verification logic as mcp-auth.ts
+ * Handles both MCP API keys and OAuth tokens
  */
 export async function verifySseToken(req: NextRequest): Promise<AuthContext | null> {
   const token = extractToken(req);
@@ -42,18 +42,31 @@ export async function verifySseToken(req: NextRequest): Promise<AuthContext | nu
     return null;
   }
 
-  if (!process.env.JWT_SECRET) {
-    console.error('JWT_SECRET is not configured');
+  // Try JWT_SECRET first, fall back to SUPABASE_JWT_SECRET
+  const jwtSecret = process.env.JWT_SECRET || process.env.SUPABASE_JWT_SECRET;
+  if (!jwtSecret) {
+    console.error('JWT_SECRET or SUPABASE_JWT_SECRET is not configured');
     return null;
   }
 
   try {
-    const secret = new TextEncoder().encode(process.env.JWT_SECRET);
+    const secret = new TextEncoder().encode(jwtSecret);
     const { payload } = await jwtVerify(token, secret, {
       issuer: process.env.NEXT_PUBLIC_APP_URL || 'https://quoth.ai-innovation.site',
       audience: 'mcp-server',
     });
 
+    // Handle OAuth tokens (type: 'mcp')
+    if (payload.type === 'mcp') {
+      return {
+        project_id: payload.sub as string,
+        user_id: payload.user_id as string,
+        role: (payload.role as 'admin' | 'editor' | 'viewer') || 'viewer',
+        label: payload.email as string | undefined,
+      };
+    }
+
+    // Handle regular MCP API keys
     const authContext: AuthContext = {
       project_id: payload.sub as string,
       user_id: payload.user_id as string,
