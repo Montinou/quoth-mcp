@@ -30,7 +30,7 @@ export function Navbar({
   links = defaultLinks,
   showAuth = true,
 }: NavbarProps) {
-  const { user, profile, signOut } = useAuth();
+  const { user, profile, loading, signOut } = useAuth();
   const [dropdownOpen, setDropdownOpen] = useState(false);
 
   return (
@@ -59,7 +59,14 @@ export function Navbar({
 
         {showAuth && (
           <div className="flex items-center gap-4">
-            {user && profile ? (
+            {loading ? (
+              // Loading state - show skeleton
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-full bg-violet-spectral/10 animate-pulse" />
+                <div className="hidden md:block w-20 h-4 bg-violet-spectral/10 rounded animate-pulse" />
+              </div>
+            ) : user ? (
+              // Authenticated - show user dropdown
               <div className="relative">
                 <button
                   onClick={() => setDropdownOpen(!dropdownOpen)}
@@ -67,10 +74,12 @@ export function Navbar({
                 >
                   <div className="w-8 h-8 rounded-full bg-violet-spectral/20 flex items-center justify-center border border-violet-spectral/30">
                     <span className="text-violet-spectral font-medium">
-                      {profile.username?.[0]?.toUpperCase()}
+                      {profile?.username?.[0]?.toUpperCase() || user.email?.[0]?.toUpperCase() || 'U'}
                     </span>
                   </div>
-                  <span className="hidden md:block">{profile.username}</span>
+                  <span className="hidden md:block">
+                    {profile?.username || user.email?.split('@')[0] || 'User'}
+                  </span>
                   <svg
                     className={cn(
                       "w-4 h-4 transition-transform",
@@ -132,6 +141,7 @@ export function Navbar({
                 )}
               </div>
             ) : (
+              // Not authenticated - show login/signup
               <>
                 <Link
                   href="/auth/login"

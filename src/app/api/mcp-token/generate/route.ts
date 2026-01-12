@@ -37,18 +37,38 @@ export async function POST(req: NextRequest) {
     }
 
     // 3. Verify user has admin/editor role
-    const { data: membership, error: membershipError } = await supabase
+    let { data: membership, error: membershipError } = await supabase
       .from('project_members')
       .select('role')
       .eq('project_id', profile.default_project_id)
       .eq('user_id', user.id)
       .single();
 
+    // Auto-create missing membership if user owns this project
     if (membershipError || !membership) {
-      return NextResponse.json(
-        { error: 'You are not a member of this project' },
-        { status: 403 }
-      );
+      console.log(`[Token Gen] Creating missing membership for user ${user.id} in project ${profile.default_project_id}`);
+
+      // Create membership as admin (user owns their default project)
+      const { data: newMembership, error: createError } = await supabase
+        .from('project_members')
+        .insert({
+          project_id: profile.default_project_id,
+          user_id: user.id,
+          role: 'admin'
+        })
+        .select('role')
+        .single();
+
+      if (createError) {
+        console.error('[Token Gen] Failed to create membership:', createError);
+        return NextResponse.json(
+          { error: 'You are not a member of this project' },
+          { status: 403 }
+        );
+      }
+
+      membership = newMembership;
+      console.log(`[Token Gen] Successfully created admin membership for user ${user.id}`);
     }
 
     if (membership.role === 'viewer') {

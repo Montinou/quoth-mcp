@@ -141,10 +141,39 @@ async function getSessionContext(): Promise<UserContext | null> {
     .eq('user_id', user.id)
     .single();
 
+  // Auto-create missing membership if user owns this project
+  let userRole = membership?.role;
+  if (!membership && profile?.default_project_id) {
+    console.log(`[OAuth] Creating missing membership for user ${user.id} in project ${projectId}`);
+
+    // Create membership as admin (user owns their default project)
+    const { data: newMembership, error: membershipError } = await supabase
+      .from('project_members')
+      .insert({
+        project_id: projectId,
+        user_id: user.id,
+        role: 'admin'
+      })
+      .select('role')
+      .single();
+
+    if (membershipError) {
+      console.error('[OAuth] Failed to create membership:', membershipError);
+      // Fall back to viewer if creation fails
+      userRole = 'viewer';
+    } else {
+      userRole = newMembership?.role || 'admin';
+      console.log(`[OAuth] Successfully created admin membership for user ${user.id}`);
+    }
+  } else if (!membership) {
+    // No membership and no default project - default to viewer
+    userRole = 'viewer';
+  }
+
   return {
     user_id: user.id,
     project_id: projectId,
-    role: membership?.role || 'viewer',
+    role: userRole,
     email: user.email,
   };
 }
