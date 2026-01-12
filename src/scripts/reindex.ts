@@ -1,13 +1,15 @@
-
 import { createClient } from '@supabase/supabase-js';
-import { astChunker } from '../lib/quoth/chunking';
-import { generateJinaEmbedding } from '../lib/ai';
 import { calculateChecksum } from '../lib/sync';
 import dotenv from 'dotenv';
 
 // Load env vars
 dotenv.config({ path: '.env.local' });
 dotenv.config(); // fallback
+
+// Dynamic imports for env-dependent modules
+// accessing them inside main function or global scope after config
+let astChunker: any;
+let generateJinaEmbedding: any;
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -21,6 +23,13 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 
 async function reindexAll() {
   console.log("Starting Mass Re-indexing...");
+
+  // Load modules
+  const chunkingModule = await import('../lib/quoth/chunking');
+  astChunker = chunkingModule.astChunker;
+  
+  const aiModule = await import('../lib/ai');
+  generateJinaEmbedding = aiModule.generateJinaEmbedding;
 
   // 1. Fetch all documents
   const { data: documents, error } = await supabase

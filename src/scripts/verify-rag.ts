@@ -1,12 +1,14 @@
-import { astChunker } from "../lib/quoth/chunking";
-import { generateJinaEmbedding, isAIConfigured } from "../lib/ai";
 import dotenv from 'dotenv';
 
-// Load env vars
+// Load env vars BEFORE importing libs
 dotenv.config({ path: '.env.local' });
-dotenv.config(); // fallback
+dotenv.config();
 
 async function verify() {
+  // Dynamic imports to ensure env vars are loaded first
+  const { generateJinaEmbedding, isAIConfigured } = await import("../lib/ai");
+  const { astChunker } = await import("../lib/quoth/chunking");
+
   console.log("Starting Next-Gen RAG Layout Verification...");
 
   // 1. Verify Dependencies
