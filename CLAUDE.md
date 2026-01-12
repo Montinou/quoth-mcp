@@ -69,6 +69,41 @@ npm run lint     # Run ESLint
 npx tsx scripts/index-knowledge-base.ts
 ```
 
+## Database Migrations
+
+Migrations are stored in `supabase/migrations/` and must be applied to the production database.
+
+### Applying Migrations via psql
+
+The recommended way to apply migrations is using `psql` with the database password from `.env`:
+
+```bash
+# Apply a specific migration file
+PGPASSWORD="YOUR_DB_PASSWORD" psql "postgres://postgres.PROJECT_REF@aws-1-sa-east-1.pooler.supabase.com:5432/postgres?sslmode=require" -f supabase/migrations/XXX_migration_name.sql
+
+# Example with actual values from .env
+PGPASSWORD="$(grep POSTGRES_PASSWORD .env | cut -d '=' -f2 | tr -d '"')" \
+psql "$(grep POSTGRES_URL_NON_POOLING .env | cut -d '=' -f2 | tr -d '"')" \
+-f supabase/migrations/012_fix_user_deletion_cascade.sql
+```
+
+### Alternative: Supabase CLI (if configured)
+
+```bash
+# This requires proper authentication setup
+supabase db push --linked
+```
+
+**Note**: The Supabase CLI method may require password configuration. Use the `psql` method above for more reliable migrations.
+
+### Migration Best Practices
+
+1. Always test migrations locally first
+2. Use transactions (`BEGIN;` / `COMMIT;`) in migration files
+3. Include rollback instructions as comments
+4. Name migrations sequentially: `XXX_descriptive_name.sql`
+5. Document breaking changes in migration comments
+
 ## Architecture
 
 Quoth uses the **Genesis Strategy** pattern:
