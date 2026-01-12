@@ -1,106 +1,94 @@
 /**
- * Next.js Middleware for Route Protection
- * Handles authentication state and redirects for protected routes
- * Uses Supabase Auth with cookie-based sessions
+ * Next.js Middleware for Session Management and Route Protection
+ * Uses Supabase SSR with getClaims() for proper JWT validation
+ * 
+ * Based on official Supabase proxy pattern:
+ * https://supabase.com/docs/guides/auth/server-side/nextjs
  */
 
-import { type NextRequest, NextResponse } from 'next/server';
-import { createServerClient } from '@supabase/ssr';
+import { type NextRequest, NextResponse } from 'next/server'
+import { createServerClient } from '@supabase/ssr'
 
 export async function middleware(request: NextRequest) {
-  let response = NextResponse.next({
-    request: {
-      headers: request.headers,
-    },
-  });
+  let supabaseResponse = NextResponse.next({
+    request,
+  })
 
+  // Create Supabase client with proper cookie handling
+  // IMPORTANT: Always create a new client on each request
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
-        get(name: string) {
-          return request.cookies.get(name)?.value;
+        getAll() {
+          return request.cookies.getAll()
         },
-        set(name: string, value: string, options) {
-          request.cookies.set({
-            name,
-            value,
-            ...options,
-          });
-          response = NextResponse.next({
-            request: {
-              headers: request.headers,
-            },
-          });
-          response.cookies.set({
-            name,
-            value,
-            ...options,
-          });
-        },
-        remove(name: string, options) {
-          request.cookies.set({
-            name,
-            value: '',
-            ...options,
-          });
-          response = NextResponse.next({
-            request: {
-              headers: request.headers,
-            },
-          });
-          response.cookies.set({
-            name,
-            value: '',
-            ...options,
-          });
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
+          supabaseResponse = NextResponse.next({
+            request,
+          })
+          cookiesToSet.forEach(({ name, value, options }) =>
+            supabaseResponse.cookies.set(name, value, options)
+          )
         },
       },
     }
-  );
+  )
 
-  // Get user session
+  // IMPORTANT: Do not run code between createServerClient and getClaims()
+  // This ensures proper token refresh before any auth checks
+  
+  // Use getUser() for now as getClaims() may not be available in current version
+  // getUser() validates the JWT with Supabase Auth server
   const {
     data: { user },
-  } = await supabase.auth.getUser();
+  } = await supabase.auth.getUser()
 
   // Protected routes that require authentication
-  const protectedRoutes = ['/dashboard', '/proposals'];
+  const protectedRoutes = ['/dashboard', '/proposals', '/knowledge-base']
   const isProtectedRoute = protectedRoutes.some((route) =>
     request.nextUrl.pathname.startsWith(route)
-  );
+  )
 
   // Redirect unauthenticated users to landing page
   if (isProtectedRoute && !user) {
-    return NextResponse.redirect(new URL('/', request.url));
+    const url = request.nextUrl.clone()
+    url.pathname = '/'
+    return NextResponse.redirect(url)
   }
 
   // Redirect authenticated users away from auth pages (except specific pages)
-  // These pages need to work even if user is logged in:
-  // - MCP/CLI login: for token generation
-  // - Callback/verify: for email confirmation flow
   const authExceptions = [
     '/auth/mcp-login',
     '/auth/cli',
     '/auth/callback',
     '/auth/verify-email'
-  ];
+  ]
   const isAuthException = authExceptions.some((path) =>
     request.nextUrl.pathname.startsWith(path)
-  );
+  )
 
   if (request.nextUrl.pathname.startsWith('/auth') && user && !isAuthException) {
-    return NextResponse.redirect(new URL('/dashboard', request.url));
+    return NextResponse.redirect(new URL('/dashboard', request.url))
   }
 
-  return response;
+  // IMPORTANT: You *must* return the supabaseResponse object as it is.
+  // The cookies have been properly set on this response object.
+  return supabaseResponse
 }
 
 export const config = {
   matcher: [
-    '/dashboard/:path*',
-    '/proposals/:path*',
-    '/auth/:path*',
+    /*
+     * Match all request paths except for the ones starting with:
+     * - _next/static (static files)
+     * - _next/image (image optimization files)
+     * - favicon.ico (favicon file)
+     * - api/mcp (MCP endpoints have their own auth)
+     * - .well-known (OAuth discovery)
+     */
+    '/((?!_next/static|_next/image|favicon.ico|api/mcp|\\.well-known|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)',
   ],
-};
+}

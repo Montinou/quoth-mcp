@@ -2,6 +2,8 @@
  * Authentication Context
  * Manages user authentication state, session, and profile
  * Uses Supabase Auth with cookie-based sessions
+ * 
+ * Session refresh is handled by middleware - this context only tracks state
  */
 
 'use client';
@@ -39,52 +41,41 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [profileError, setProfileError] = useState<string | null>(null);
-
-  // Create supabase client once and memoize it
   const [supabase] = useState(() => createClient());
 
   useEffect(() => {
-    let ignore = false;
-    const abortController = new AbortController();
+    let mounted = true;
 
     // Initialize auth state
     const initAuth = async () => {
       try {
-        const { data: { session }, error } = await supabase.auth.getSession();
+        // Use getUser() which validates JWT with Supabase Auth server
+        const { data: { user }, error } = await supabase.auth.getUser();
 
-        // Check if we should ignore this result (component unmounted)
-        if (ignore || abortController.signal.aborted) {
-          return;
-        }
+        if (!mounted) return;
 
         if (error) {
-          console.error('[AuthContext] Session error:', error);
+          // User not authenticated - this is normal, not an error
           setLoading(false);
           return;
         }
 
-        setSession(session);
-        setUser(session?.user ?? null);
-
-        if (process.env.NODE_ENV === 'development') {
-          console.log('[AuthContext] Session initialized:', {
-            hasSession: !!session,
-            hasUser: !!session?.user
-          });
+        if (user) {
+          setUser(user);
+          // Also get session for convenience
+          const { data: { session } } = await supabase.auth.getSession();
+          if (mounted) {
+            setSession(session);
+            await fetchProfile(user.id);
+          }
         }
-
-        if (session?.user) {
-          await fetchProfile(session.user.id);
+        
+        if (mounted) {
+          setLoading(false);
         }
-        setLoading(false);
-      } catch (err: unknown) {
-        // Gracefully handle AbortError (happens during React Strict Mode cleanup)
-        if (err instanceof Error && err.name === 'AbortError') {
-          // This is expected during cleanup, no need to log an error
-          return;
-        }
-        console.error('[AuthContext] Init error:', err);
-        if (!ignore) {
+      } catch (err) {
+        // Silently handle errors - middleware handles auth
+        if (mounted) {
           setLoading(false);
         }
       }
@@ -92,18 +83,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     initAuth();
 
-    // Listen for auth changes (with cleanup)
+    // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        if (ignore || abortController.signal.aborted) return;
-
-        if (process.env.NODE_ENV === 'development') {
-          console.log('[AuthContext] Auth state changed:', {
-            event,
-            hasSession: !!session,
-            hasUser: !!session?.user
-          });
-        }
+        if (!mounted) return;
 
         setSession(session);
         setUser(session?.user ?? null);
@@ -116,30 +99,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     );
 
-    // CRITICAL: Cleanup
     return () => {
-      ignore = true;
-      abortController.abort();
+      mounted = false;
       subscription.unsubscribe();
     };
   }, [supabase]);
 
-  // Refresh session when window gains focus
-  useEffect(() => {
-    const handleFocus = async () => {
-      if (process.env.NODE_ENV === 'development') {
-        console.log('[AuthContext] Window focused, refreshing session');
-      }
-      try {
-        await supabase.auth.getSession();
-      } catch (err) {
-        console.error('[AuthContext] Focus refresh error:', err);
-      }
-    };
-
-    window.addEventListener('focus', handleFocus);
-    return () => window.removeEventListener('focus', handleFocus);
-  }, [supabase]);
+  // Note: Focus refresh removed - middleware handles session refresh
 
   async function fetchProfile(userId: string) {
     try {
@@ -152,25 +118,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         .single();
 
       if (error) {
-        console.error('[AuthContext] Profile fetch error:', error);
         setProfileError(error.message);
-        // Don't set profile to null - keep existing if any
         return;
       }
 
       if (data) {
         setProfile(data as Profile);
-
-        if (process.env.NODE_ENV === 'development') {
-          console.log('[AuthContext] Profile loaded:', {
-            username: data.username,
-            email: data.email,
-            has_default_project: !!data.default_project_id
-          });
-        }
       }
     } catch (err) {
-      console.error('[AuthContext] Profile fetch exception:', err);
       setProfileError('Failed to load profile');
     }
   }
