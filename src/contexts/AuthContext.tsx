@@ -46,13 +46,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     let mounted = true;
 
-    // Initialize auth state
+    // Initialize auth state with timeout to prevent infinite loading
     const initAuth = async () => {
       try {
+        // Add timeout to prevent hanging - 5 seconds max
+        const timeoutPromise = new Promise<{ data: { user: null }, error: Error }>((_, reject) =>
+          setTimeout(() => reject(new Error('Auth timeout')), 5000)
+        );
+
         // Use getUser() which validates JWT with Supabase Auth server
-        const { data: { user }, error } = await supabase.auth.getUser();
+        const result = await Promise.race([
+          supabase.auth.getUser(),
+          timeoutPromise
+        ]);
 
         if (!mounted) return;
+
+        const { data: { user }, error } = result;
 
         if (error) {
           // No valid session (expected on pages without auth)
@@ -70,13 +80,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             await fetchProfile(user.id);
           }
         }
-        
+
         if (mounted) {
           setLoading(false);
         }
       } catch (err) {
-        console.error('[AuthContext] Unexpected error during init:', err);
-        // Silently handle errors - middleware handles auth
+        console.error('[AuthContext] Auth init error (may be timeout):', err);
+        // On error or timeout, just assume no session and continue
         if (mounted) {
           setLoading(false);
         }
