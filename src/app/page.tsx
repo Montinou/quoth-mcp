@@ -4,10 +4,13 @@
    ============================================================================= */
 "use client";
 
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { Database, ShieldAlert, History } from "lucide-react";
 import Link from "next/link";
 import { Navbar, Footer, GlassCard } from "@/components/quoth";
 import { Button } from "@/components/ui/button";
+import { useAuth } from "@/contexts/AuthContext";
 import {
   CodeBlock,
   CodeLine,
@@ -157,6 +160,20 @@ const Features = () => (
 );
 
 export default function Home() {
+  const { user, loading } = useAuth();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (!loading && user) {
+      router.replace("/dashboard");
+    }
+  }, [user, loading, router]);
+
+  // Show nothing while checking auth to avoid flash
+  if (loading || user) {
+    return null;
+  }
+
   return (
     <div className="min-h-screen animate-page-fade-in">
       <Navbar />
