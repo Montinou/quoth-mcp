@@ -139,21 +139,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       setProfileError(null);
 
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', userId)
-        .single();
-
-      if (error) {
-        setProfileError(error.message);
-        return;
+      // Use API route to fetch profile (bypasses RLS recursion via admin client)
+      const response = await fetch('/api/auth/profile');
+      
+      if (!response.ok) {
+        throw new Error(`Profile fetch failed: ${response.status}`);
       }
+
+      const data = await response.json();
 
       if (data) {
         setProfile(data as Profile);
       }
     } catch (err) {
+      console.error('[AuthContext] Failed to load profile:', err);
       setProfileError('Failed to load profile');
     }
   }
