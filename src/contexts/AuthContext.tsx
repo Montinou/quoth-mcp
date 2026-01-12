@@ -143,7 +143,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           data: {
             username,
           },
-          emailRedirectTo: `${window.location.origin}/auth/callback`,
+          // Full URL where user should land after callback verification
+          emailRedirectTo: `${window.location.origin}/dashboard`,
         },
       });
 

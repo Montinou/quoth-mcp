@@ -63,7 +63,14 @@ function buildActionUrl(type: string, token: string, redirectTo?: string): strin
   });
 
   if (redirectTo) {
-    params.set('next', redirectTo);
+    // Extract pathname from full URL (e.g., "https://example.com/dashboard" -> "/dashboard")
+    try {
+      const url = new URL(redirectTo, APP_URL);
+      params.set('next', url.pathname);
+    } catch {
+      // If not a valid URL, use as-is (likely already a path)
+      params.set('next', redirectTo);
+    }
   }
 
   return `${baseUrl}?${params.toString()}`;
@@ -105,13 +112,8 @@ export async function POST(request: Request) {
     const emailType = email_data.email_action_type;
     const token = email_data.token_hash;
 
-    console.log('[Webhook] APP_URL:', APP_URL);
-    console.log('[Webhook] email_data.redirect_to:', email_data.redirect_to);
-    console.log('[Webhook] token_hash:', token);
-
     // Build action URL
     const actionUrl = buildActionUrl(emailType, token, email_data.redirect_to);
-    console.log('[Webhook] Built action URL:', actionUrl);
 
     // Render appropriate email template
     let subject: string;
