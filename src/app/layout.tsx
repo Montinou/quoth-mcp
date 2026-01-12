@@ -25,6 +25,12 @@ export const metadata: Metadata = {
   description: "The AI-driven auditor that enforces consistency between your codebase and documentation. Stop hallucinations. Enforce your architecture. Nevermore guess.",
   keywords: ["MCP", "Model Context Protocol", "AI", "Documentation", "Code Auditor", "Architecture", "Vitest", "Playwright"],
   authors: [{ name: "Quoth Labs" }],
+  icons: {
+    icon: [
+      { url: "/icon.svg", type: "image/svg+xml" },
+    ],
+    apple: "/apple-icon.png",
+  },
   openGraph: {
     title: "Quoth | The Living Source of Truth",
     description: "The arbiter of truth between your code and its documentation. Stoic. Precise. Unyielding.",
