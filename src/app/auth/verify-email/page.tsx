@@ -33,9 +33,9 @@ export default function VerifyEmailPage() {
           <p className="text-sm text-gray-300 mb-2">What happens next:</p>
           <ol className="text-sm text-gray-400 text-left space-y-1">
             <li>1. Click the verification link in your email</li>
-            <li>2. You'll be redirected back to Quoth</li>
-            <li>3. Sign in with your credentials</li>
-            <li>4. Access your dashboard and generate MCP tokens</li>
+            <li>2. You'll be automatically signed in</li>
+            <li>3. Your default project will be created</li>
+            <li>4. Access your dashboard and start using Quoth</li>
           </ol>
         </div>
 

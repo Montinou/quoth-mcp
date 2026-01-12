@@ -78,10 +78,21 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(redirectUrl);
   }
 
-  // Redirect authenticated users away from auth pages (except OAuth login)
-  // OAuth login needs to work even if user is logged in (for token generation)
-  const isOAuthLogin = request.nextUrl.pathname === '/auth/oauth-login';
-  if (request.nextUrl.pathname.startsWith('/auth') && user && !isOAuthLogin) {
+  // Redirect authenticated users away from auth pages (except specific pages)
+  // These pages need to work even if user is logged in:
+  // - MCP/CLI login: for token generation
+  // - Callback/verify: for email confirmation flow
+  const authExceptions = [
+    '/auth/mcp-login',
+    '/auth/cli',
+    '/auth/callback',
+    '/auth/verify-email'
+  ];
+  const isAuthException = authExceptions.some((path) =>
+    request.nextUrl.pathname.startsWith(path)
+  );
+
+  if (request.nextUrl.pathname.startsWith('/auth') && user && !isAuthException) {
     return NextResponse.redirect(new URL('/dashboard', request.url));
   }
 
