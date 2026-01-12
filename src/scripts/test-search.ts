@@ -19,7 +19,7 @@ async function testSearch() {
     console.log('─'.repeat(60));
 
     try {
-      const results = await searchDocuments(query, PROJECT_UUID, 5);
+      const results = await searchDocuments(query, PROJECT_UUID);
 
       if (results.length === 0) {
         console.log('  No results found');
