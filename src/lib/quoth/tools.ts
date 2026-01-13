@@ -396,6 +396,188 @@ The proposal has been logged for human review. A maintainer will review and appr
     }
   );
 
+  // Tool 4: quoth_list_templates
+  server.registerTool(
+    'quoth_list_templates',
+    {
+      title: 'List Document Templates',
+      description:
+        'Lists available document templates by category. Templates are chunk-optimized structures for creating well-indexed documentation.',
+      inputSchema: {
+        category: z.enum(['all', 'architecture', 'patterns', 'contracts']).optional()
+          .describe('Filter by category. Use "all" or omit to list all templates.'),
+      },
+    },
+    async ({ category }) => {
+      try {
+        // Query templates from the database
+        let query = supabase
+          .from('documents')
+          .select('id, file_path, title, content')
+          .eq('project_id', authContext.project_id)
+          .like('file_path', 'templates/%');
+
+        // Filter by category if specified
+        if (category && category !== 'all') {
+          query = query.like('file_path', `templates/${category}/%`);
+        }
+
+        const { data: templates, error } = await query;
+
+        if (error) {
+          throw new Error(`Failed to list templates: ${error.message}`);
+        }
+
+        if (!templates || templates.length === 0) {
+          return {
+            content: [{
+              type: 'text' as const,
+              text: `No templates found${category && category !== 'all' ? ` in category "${category}"` : ''}.
+
+Templates are stored in the \`templates/\` directory. To add templates:
+1. Create markdown files in \`templates/{category}/\`
+2. Run genesis to index them`,
+            }],
+          };
+        }
+
+        // Extract purpose from each template (first paragraph after ## Purpose)
+        const extractPurpose = (content: string): string => {
+          const match = content.match(/## Purpose[^#]*?\n\n([^\n]+)/);
+          return match ? match[1].slice(0, 150) : 'No purpose defined';
+        };
+
+        // Extract category from path
+        const extractCategory = (path: string): string => {
+          const parts = path.split('/');
+          return parts.length >= 2 ? parts[1] : 'unknown';
+        };
+
+        const formattedTemplates = templates.map((t, index) => `
+<template index="${index + 1}">
+  <id>${t.title}</id>
+  <path>${t.file_path}</path>
+  <category>${extractCategory(t.file_path)}</category>
+  <purpose>${extractPurpose(t.content)}</purpose>
+</template>`).join('\n');
+
+        return {
+          content: [{
+            type: 'text' as const,
+            text: `<templates count="${templates.length}"${category && category !== 'all' ? ` category="${category}"` : ''}>
+${formattedTemplates}
+</templates>
+
+**Usage:**
+- Use \`quoth_get_template\` with the template path to fetch full content
+- Templates are chunk-optimized for embedding (each H2 = one chunk)
+- Follow template structure exactly for best search results`,
+          }],
+        };
+      } catch (error) {
+        return {
+          content: [{
+            type: 'text' as const,
+            text: `Error listing templates: ${error instanceof Error ? error.message : 'Unknown error'}`,
+          }],
+        };
+      }
+    }
+  );
+
+  // Tool 5: quoth_get_template
+  server.registerTool(
+    'quoth_get_template',
+    {
+      title: 'Get Document Template',
+      description:
+        'Retrieves a specific document template with full structure, examples, and embedding hints. Use templates to create well-indexed documentation.',
+      inputSchema: {
+        template_id: z.string()
+          .describe('Template path or ID, e.g. "templates/architecture/project-overview.md" or "project-overview"'),
+      },
+    },
+    async ({ template_id }) => {
+      try {
+        // Try to find template by path or title
+        let query = supabase
+          .from('documents')
+          .select('id, file_path, title, content')
+          .eq('project_id', authContext.project_id)
+          .like('file_path', 'templates/%');
+
+        // If full path provided, use exact match
+        if (template_id.startsWith('templates/')) {
+          query = query.eq('file_path', template_id);
+        } else {
+          // Otherwise search by title or partial path
+          query = query.or(`title.ilike.%${template_id}%,file_path.ilike.%${template_id}%`);
+        }
+
+        const { data: templates, error } = await query;
+
+        if (error) {
+          throw new Error(`Failed to get template: ${error.message}`);
+        }
+
+        if (!templates || templates.length === 0) {
+          // Try to suggest similar templates
+          const { data: allTemplates } = await supabase
+            .from('documents')
+            .select('file_path, title')
+            .eq('project_id', authContext.project_id)
+            .like('file_path', 'templates/%');
+
+          const suggestions = allTemplates?.slice(0, 5).map(t => `- ${t.file_path}`).join('\n') || 'No templates available';
+
+          return {
+            content: [{
+              type: 'text' as const,
+              text: `Template "${template_id}" not found.
+
+**Available templates:**
+${suggestions}
+
+Use \`quoth_list_templates\` to see all available templates.`,
+            }],
+          };
+        }
+
+        // Use first match if multiple found
+        const template = templates[0];
+
+        return {
+          content: [{
+            type: 'text' as const,
+            text: `## Template: ${template.title}
+
+**Path:** \`${template.file_path}\`
+
+---
+
+${template.content}
+
+---
+
+**Chunk Optimization Notes:**
+- Each \`## \` section becomes a separate embedding chunk
+- Optimal section size: 75-300 tokens (~58-231 words)
+- Frontmatter keywords are injected into all chunks as prefix
+- Use aliases in headers: \`## Topic (Alias1, Alias2)\`
+- End each section with \`**Summary:**\` for chunk closure`,
+          }],
+        };
+      } catch (error) {
+        return {
+          content: [{
+            type: 'text' as const,
+            text: `Error getting template: ${error instanceof Error ? error.message : 'Unknown error'}`,
+          }],
+        };
+      }
+    }
+  );
+
   // Register Genesis tools
   registerGenesisTools(server, authContext);
 }

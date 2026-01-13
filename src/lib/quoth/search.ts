@@ -211,7 +211,8 @@ export async function buildSearchIndex(projectId: string) {
 /**
  * Infer document type from file path
  */
-function inferDocumentType(filePath: string): 'testing-pattern' | 'architecture' | 'contract' | 'meta' {
+function inferDocumentType(filePath: string): 'testing-pattern' | 'architecture' | 'contract' | 'meta' | 'template' {
+  if (filePath.startsWith('templates/')) return 'template';
   if (filePath.startsWith('patterns/')) return 'testing-pattern';
   if (filePath.startsWith('architecture/')) return 'architecture';
   if (filePath.startsWith('contracts/')) return 'contract';

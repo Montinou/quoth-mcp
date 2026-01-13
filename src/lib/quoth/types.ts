@@ -12,14 +12,17 @@ import { z } from 'zod';
  */
 export const DocumentFrontmatterSchema = z.object({
   id: z.string(),
-  type: z.enum(['testing-pattern', 'architecture', 'contract', 'meta']),
+  type: z.enum(['testing-pattern', 'architecture', 'contract', 'meta', 'template']),
   related_stack: z.array(z.string()).optional(),
   last_verified_commit: z.string().optional(),
   last_updated_date: z.string(),
   status: z.enum(['active', 'deprecated', 'draft']),
-  // NEW: Embedding optimization fields
+  // Embedding optimization fields
   keywords: z.array(z.string()).optional().describe('Search keywords for embedding optimization'),
   common_queries: z.array(z.string()).optional().describe('FAQ-style questions this doc answers'),
+  // Template-specific fields
+  category: z.enum(['architecture', 'patterns', 'contracts']).optional().describe('Template category'),
+  target_type: z.enum(['testing-pattern', 'architecture', 'contract', 'meta']).optional().describe('Document type this template produces'),
 });
 
 export type DocumentFrontmatter = z.infer<typeof DocumentFrontmatterSchema>;
