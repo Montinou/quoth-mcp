@@ -89,6 +89,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setLoading(false);
         }
       } catch (err) {
+        // Ignore AbortError - it's expected during unmount (React 18 strict mode)
+        if (err instanceof Error && err.name === 'AbortError') {
+          return;
+        }
         console.error('[AuthContext] Auth init error:', err);
         // On error, assume no session and continue
         if (mounted) {
@@ -126,10 +130,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => {
       mounted = false;
       subscription.unsubscribe();
-      // Abort any in-flight profile fetch on cleanup
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
-      }
+      // Note: We don't abort on cleanup because React 18 strict mode would abort
+      // the initial fetch during double-mount. The mounted flag prevents state updates.
     };
   }, [supabase]);
 
@@ -171,6 +173,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setProfile(data as Profile);
       }
     } catch (err) {
+      // Ignore AbortError - it's expected when auth state changes
+      if (err instanceof Error && err.name === 'AbortError') {
+        return;
+      }
       if (abortSignal?.aborted) return;
       console.error('[AuthContext] Failed to load profile:', err);
       setProfileError('Failed to load profile');
