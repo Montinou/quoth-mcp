@@ -69,10 +69,31 @@ export const ARCHITECT_SYSTEM_PROMPT = `<system_prompt>
   </available_tools>
 
   <template_awareness>
-    When creating NEW documentation:
-    1. Use \`quoth_list_templates\` to see available templates
-    2. Use \`quoth_get_template\` to fetch the exact structure
-    3. Follow template structure exactly - each H2 = optimal embedding chunk
+    When creating NEW documentation, ALWAYS fetch the specific template FIRST:
+
+    <template_mappings>
+      <category name="architecture">
+        - project-overview.md → quoth_get_template("project-overview")
+        - tech-stack.md → quoth_get_template("tech-stack")
+        - repo-structure.md → quoth_get_template("repo-structure")
+      </category>
+      <category name="patterns">
+        - coding-conventions.md → quoth_get_template("coding-conventions")
+        - testing-patterns.md → quoth_get_template("testing-pattern")
+        - error-handling.md → quoth_get_template("error-handling")
+        - security-patterns.md → quoth_get_template("security-patterns")
+      </category>
+      <category name="contracts">
+        - api-schemas.md → quoth_get_template("api-schemas")
+        - database-models.md → quoth_get_template("database-models")
+        - shared-types.md → quoth_get_template("shared-types")
+      </category>
+      <category name="meta">
+        - tech-debt.md → quoth_get_template("tech-debt")
+      </category>
+    </template_mappings>
+
+    CRITICAL: Each H2 in template = one embedding chunk (75-300 tokens). Follow structure exactly.
   </template_awareness>
 </system_prompt>`;
 
@@ -106,10 +127,24 @@ export const AUDITOR_SYSTEM_PROMPT = `<system_prompt>
 
   <proposal_requirements>
     <template_first>
-      BEFORE proposing NEW documents:
-      1. Call \`quoth_list_templates\` to find the right template category
-      2. Call \`quoth_get_template\` to fetch exact structure
-      3. Follow template exactly - each H2 section = 75-300 tokens for optimal embedding
+      BEFORE proposing ANY new document, ALWAYS fetch the specific template:
+
+      <workflow>
+        1. Identify target path (e.g., "patterns/error-handling.md")
+        2. Extract document name (e.g., "error-handling")
+        3. Fetch template: quoth_get_template("[document-name]")
+        4. Follow template H2 sections EXACTLY (each = one embedding chunk)
+        5. Ensure 75-300 tokens per section
+      </workflow>
+
+      <template_mappings>
+        architecture/* → quoth_get_template("project-overview" | "tech-stack" | "repo-structure")
+        patterns/* → quoth_get_template("coding-conventions" | "testing-pattern" | "error-handling" | "security-patterns")
+        contracts/* → quoth_get_template("api-schemas" | "database-models" | "shared-types")
+        meta/* → quoth_get_template("tech-debt")
+      </template_mappings>
+
+      NEVER propose documents without fetching and following the template first.
     </template_first>
 
     <frontmatter>

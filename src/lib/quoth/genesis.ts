@@ -156,11 +156,36 @@ const GENESIS_MINIMAL_PROMPT = `<genesis_protocol version="3.0" depth="minimal">
   ${UPLOAD_PROTOCOL}
 
   <workflow>
-    1. Read package.json, README.md, list src/ directory
-    2. Create project-overview.md → upload
-    3. Create tech-stack.md → upload
-    4. Create repo-structure.md → upload
-    5. Report completion
+    <phase name="Setup">
+      1. Read package.json, README.md, list src/ directory
+    </phase>
+
+    <phase name="Foundation">
+      <doc output="architecture/project-overview.md">
+        <step>FETCH: quoth_get_template("project-overview")</step>
+        <step>ANALYZE: package.json, README.md, entry points</step>
+        <step>CREATE: Follow template structure exactly (each H2 = one chunk)</step>
+        <step>UPLOAD: quoth_propose_update → Report "Uploaded: project-overview.md (1/3)"</step>
+      </doc>
+
+      <doc output="architecture/tech-stack.md">
+        <step>FETCH: quoth_get_template("tech-stack")</step>
+        <step>ANALYZE: dependencies, config files, runtime versions</step>
+        <step>CREATE: Follow template structure exactly</step>
+        <step>UPLOAD: quoth_propose_update → Report "Uploaded: tech-stack.md (2/3)"</step>
+      </doc>
+
+      <doc output="architecture/repo-structure.md">
+        <step>FETCH: quoth_get_template("repo-structure")</step>
+        <step>ANALYZE: directory tree, naming patterns</step>
+        <step>CREATE: Follow template structure exactly</step>
+        <step>UPLOAD: quoth_propose_update → Report "Uploaded: repo-structure.md (3/3)"</step>
+      </doc>
+    </phase>
+
+    <phase name="Complete">
+      Report: "Genesis complete. 3 documents created and uploaded."
+    </phase>
   </workflow>
 </genesis_protocol>`;
 
@@ -241,11 +266,54 @@ const GENESIS_STANDARD_PROMPT = `<genesis_protocol version="3.0" depth="standard
   ${UPLOAD_PROTOCOL}
 
   <workflow>
-    1. Read package.json, README.md, src/ structure
-    2. Read 2-3 representative source files for patterns
-    3. Read test files for testing patterns
-    4. Create and upload 5 documents sequentially
-    5. Report completion
+    <phase name="Setup">
+      1. Read package.json, README.md, src/ structure
+      2. Read 2-3 representative source files for patterns
+      3. Read test files for testing patterns
+    </phase>
+
+    <phase name="Foundation">
+      <doc output="architecture/project-overview.md">
+        <step>FETCH: quoth_get_template("project-overview")</step>
+        <step>ANALYZE: package.json, README.md, entry points</step>
+        <step>CREATE: Follow template structure exactly</step>
+        <step>UPLOAD: quoth_propose_update → Report "Uploaded (1/5)"</step>
+      </doc>
+
+      <doc output="architecture/tech-stack.md">
+        <step>FETCH: quoth_get_template("tech-stack")</step>
+        <step>ANALYZE: dependencies, config files, runtime</step>
+        <step>CREATE: Follow template structure exactly</step>
+        <step>UPLOAD: quoth_propose_update → Report "Uploaded (2/5)"</step>
+      </doc>
+
+      <doc output="architecture/repo-structure.md">
+        <step>FETCH: quoth_get_template("repo-structure")</step>
+        <step>ANALYZE: directory tree, naming patterns</step>
+        <step>CREATE: Follow template structure exactly</step>
+        <step>UPLOAD: quoth_propose_update → Report "Uploaded (3/5)"</step>
+      </doc>
+    </phase>
+
+    <phase name="Patterns">
+      <doc output="patterns/coding-conventions.md">
+        <step>FETCH: quoth_get_template("coding-conventions")</step>
+        <step>ANALYZE: TypeScript config, ESLint rules, code samples</step>
+        <step>CREATE: Follow template structure exactly</step>
+        <step>UPLOAD: quoth_propose_update → Report "Uploaded (4/5)"</step>
+      </doc>
+
+      <doc output="patterns/testing-patterns.md">
+        <step>FETCH: quoth_get_template("testing-pattern")</step>
+        <step>ANALYZE: test files, test config, test framework</step>
+        <step>CREATE: Follow template structure exactly</step>
+        <step>UPLOAD: quoth_propose_update → Report "Uploaded (5/5)"</step>
+      </doc>
+    </phase>
+
+    <phase name="Complete">
+      Report: "Genesis complete. 5 documents created and uploaded."
+    </phase>
   </workflow>
 </genesis_protocol>`;
 
@@ -310,12 +378,91 @@ const GENESIS_COMPREHENSIVE_PROMPT = `<genesis_protocol version="3.0" depth="com
   ${UPLOAD_PROTOCOL}
 
   <workflow>
-    1. Foundation: Read configs, create 3 architecture docs
-    2. Patterns: Analyze source files, create 2 pattern docs
-    3. Contracts: Read API/DB/types, create 3 contract docs
-    4. Advanced: Analyze error handling/security/debt, create 3 docs
-    5. Upload each document immediately after creation
-    6. Report completion with all 11 documents
+    <phase name="Setup">
+      Read package.json, README.md, src/ structure, test files, API routes, schema files.
+    </phase>
+
+    <phase name="Foundation" docs="3">
+      <doc output="architecture/project-overview.md">
+        <step>FETCH: quoth_get_template("project-overview")</step>
+        <step>ANALYZE: package.json, README.md, entry points</step>
+        <step>CREATE: Follow template structure exactly</step>
+        <step>UPLOAD: quoth_propose_update → Report "Uploaded (1/11)"</step>
+      </doc>
+      <doc output="architecture/tech-stack.md">
+        <step>FETCH: quoth_get_template("tech-stack")</step>
+        <step>ANALYZE: dependencies, config files, runtime</step>
+        <step>CREATE: Follow template structure exactly</step>
+        <step>UPLOAD: quoth_propose_update → Report "Uploaded (2/11)"</step>
+      </doc>
+      <doc output="architecture/repo-structure.md">
+        <step>FETCH: quoth_get_template("repo-structure")</step>
+        <step>ANALYZE: directory tree, naming patterns</step>
+        <step>CREATE: Follow template structure exactly</step>
+        <step>UPLOAD: quoth_propose_update → Report "Uploaded (3/11)"</step>
+      </doc>
+    </phase>
+
+    <phase name="Patterns" docs="2">
+      <doc output="patterns/coding-conventions.md">
+        <step>FETCH: quoth_get_template("coding-conventions")</step>
+        <step>ANALYZE: TypeScript config, ESLint rules, code samples</step>
+        <step>CREATE: Follow template structure exactly</step>
+        <step>UPLOAD: quoth_propose_update → Report "Uploaded (4/11)"</step>
+      </doc>
+      <doc output="patterns/testing-patterns.md">
+        <step>FETCH: quoth_get_template("testing-pattern")</step>
+        <step>ANALYZE: test files, test config, test framework</step>
+        <step>CREATE: Follow template structure exactly</step>
+        <step>UPLOAD: quoth_propose_update → Report "Uploaded (5/11)"</step>
+      </doc>
+    </phase>
+
+    <phase name="Contracts" docs="3">
+      <doc output="contracts/api-schemas.md">
+        <step>FETCH: quoth_get_template("api-schemas")</step>
+        <step>ANALYZE: API routes, request/response types, validation</step>
+        <step>CREATE: Follow template structure exactly</step>
+        <step>UPLOAD: quoth_propose_update → Report "Uploaded (6/11)"</step>
+      </doc>
+      <doc output="contracts/database-models.md">
+        <step>FETCH: quoth_get_template("database-models")</step>
+        <step>ANALYZE: migrations, schema files, ORM models</step>
+        <step>CREATE: Follow template structure exactly</step>
+        <step>UPLOAD: quoth_propose_update → Report "Uploaded (7/11)"</step>
+      </doc>
+      <doc output="contracts/shared-types.md">
+        <step>FETCH: quoth_get_template("shared-types")</step>
+        <step>ANALYZE: type definitions, interfaces, enums</step>
+        <step>CREATE: Follow template structure exactly</step>
+        <step>UPLOAD: quoth_propose_update → Report "Uploaded (8/11)"</step>
+      </doc>
+    </phase>
+
+    <phase name="Advanced" docs="3">
+      <doc output="patterns/error-handling.md">
+        <step>FETCH: quoth_get_template("error-handling")</step>
+        <step>ANALYZE: error classes, catch patterns, API error responses</step>
+        <step>CREATE: Follow template structure exactly</step>
+        <step>UPLOAD: quoth_propose_update → Report "Uploaded (9/11)"</step>
+      </doc>
+      <doc output="patterns/security-patterns.md">
+        <step>FETCH: quoth_get_template("security-patterns")</step>
+        <step>ANALYZE: auth flows, input validation, security headers</step>
+        <step>CREATE: Follow template structure exactly</step>
+        <step>UPLOAD: quoth_propose_update → Report "Uploaded (10/11)"</step>
+      </doc>
+      <doc output="meta/tech-debt.md">
+        <step>FETCH: quoth_get_template("tech-debt")</step>
+        <step>ANALYZE: TODO/FIXME/HACK comments, known issues</step>
+        <step>CREATE: Follow template structure exactly</step>
+        <step>UPLOAD: quoth_propose_update → Report "Uploaded (11/11)"</step>
+      </doc>
+    </phase>
+
+    <phase name="Complete">
+      Report: "Genesis complete. 11 documents created and uploaded."
+    </phase>
   </workflow>
 </genesis_protocol>`;
 
