@@ -60,13 +60,15 @@ quoth help     # Show help message
 ## Development Commands
 
 ```bash
-npm run dev      # Start Next.js development server
-npm run build    # Production build
-npm run start    # Start production server
-npm run lint     # Run ESLint
+npm run dev          # Start Next.js development server
+npm run build        # Production build
+npm run start        # Start production server
+npm run lint         # Run ESLint
 
-# Indexing (after adding new docs to quoth-knowledge-base/)
-npx tsx scripts/index-knowledge-base.ts
+# RAG Pipeline
+npm run verify:rag   # Test RAG pipeline works correctly
+npm run reindex      # Re-index all documents (clears and regenerates all embeddings)
+npm run setup:wasm   # Setup Tree-sitter WASM files for AST chunking
 ```
 
 ## Database Migrations
@@ -144,7 +146,7 @@ Quoth uses the **Genesis Strategy v2.0** pattern:
 The core MCP implementation exposes 4 tools and 2 prompts:
 
 **Tools:**
-- `quoth_search_index` - Semantic vector search using Gemini embeddings (768 dimensions)
+- `quoth_search_index` - Semantic vector search using Jina embeddings (512d) + Cohere reranking
 - `quoth_read_doc` - Retrieves full document content from Supabase
 - `quoth_propose_update` - Submits documentation update proposals with evidence
 - `quoth_genesis` - Genesis v2.0: phased documentation with depth levels (minimal/standard/comprehensive)
@@ -199,31 +201,70 @@ Uses CSS-first configuration with `@theme` directive in `globals.css`:
 
 ## Vector Search Architecture
 
-Quoth uses Supabase + Gemini for semantic search:
+Quoth uses a RAG pipeline: Jina Embeddings → Supabase Vector Search → Cohere Rerank.
 
 **Storage (Supabase):**
 - `projects` - Multi-tenant project support
 - `documents` - Markdown content with checksums
-- `document_embeddings` - 768-dimension vectors from Gemini
+- `document_embeddings` - 512-dimension vectors from Jina
 
-**Embedding (Gemini):**
-- Model: `text-embedding-004` (768 dimensions)
-- Chunking: Split by H2 headers
-- Rate limit: 15 RPM (4s delay between requests)
+**Embedding (Jina):**
+- Model: `jina-embeddings-v3` (512 dimensions)
+- Chunking: AST-aware via Tree-sitter for code, fallback to H2 headers for markdown
+
+**Reranking (Cohere):**
+- Model: `rerank-english-v3.0`
+- Initial fetch: 50 candidates from vector search
+- Final return: Top 15 after rerank (min relevance score: 0.5)
+- Fallback: Returns top 10 vector results if Cohere unavailable
 
 **Search Flow:**
-1. User query → Gemini embedding
-2. Supabase `match_documents` RPC (cosine similarity)
-3. Return ranked results with snippets
+1. User query → Jina embedding (512d)
+2. Supabase `match_documents` RPC (cosine similarity, fetch 50)
+3. Cohere rerank candidates
+4. Return top 15 results with snippets
 
 **Environment Variables:**
 ```
 NEXT_PUBLIC_SUPABASE_URL=https://xxx.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=eyJ...
-GEMINIAI_API_KEY=AIza...
 NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJ...
 JWT_SECRET=your-secret-here-32-bytes
+JINA_API_KEY=jina_xxx...              # Jina embeddings (512d vectors)
+COHERE_API_KEY=xxx...                 # Cohere reranking (optional, improves search quality)
+GEMINIAI_API_KEY=AIza...              # Gemini 2.0 Flash for dashboard UI responses
 ```
+
+**RAG Pipeline Flows:**
+
+```
+Dashboard UI (/api/knowledge-base/ask):
+┌─────────────┐    ┌──────────────┐    ┌────────────────┐    ┌─────────────────┐
+│ User Query  │───▶│ Jina Embed   │───▶│ Supabase       │───▶│ Cohere Rerank   │
+│             │    │ (512d)       │    │ Vector Search  │    │ (top 15)        │
+└─────────────┘    └──────────────┘    └────────────────┘    └────────┬────────┘
+                                                                      │
+                                                                      ▼
+┌─────────────┐    ┌──────────────────────────────────────────────────────────┐
+│ Natural     │◀───│ Gemini 2.0 Flash (XML prompt transforms RAG → response) │
+│ Response    │    └──────────────────────────────────────────────────────────┘
+└─────────────┘
+
+MCP Clients (quoth_search_index):
+┌─────────────┐    ┌──────────────┐    ┌────────────────┐    ┌─────────────────┐
+│ AI Query    │───▶│ Jina Embed   │───▶│ Supabase       │───▶│ Cohere Rerank   │
+│             │    │ (512d)       │    │ Vector Search  │    │ (top 15)        │
+└─────────────┘    └──────────────┘    └────────────────┘    └────────┬────────┘
+                                                                      │
+                                                                      ▼
+┌─────────────┐    ┌──────────────────────────────────────────────────────────┐
+│ Claude/     │◀───│ Raw XML results (AI client transforms using own model)  │
+│ Cursor/etc  │    └──────────────────────────────────────────────────────────┘
+└─────────────┘
+```
+
+- **Dashboard**: Gemini 2.0 Flash receives an XML-structured prompt with pipeline context and generates human-readable responses
+- **MCP**: AI agents receive structured XML results with trust levels and handle transformation themselves
 
 ## Authentication & Multi-Tenancy
 
@@ -468,10 +509,10 @@ Quoth supports multi-user collaboration on projects through a comprehensive invi
 - `mcp-handler` - MCP server handler for Next.js
 - `@supabase/supabase-js` - Supabase client for vector storage
 - `@supabase/ssr` - Server-side Supabase client with cookie management
-- `@google/generative-ai` - Gemini embeddings
+- `cohere-ai` - Cohere reranking for improved search relevance
+- `web-tree-sitter` - AST-aware code chunking
 - `gray-matter` - YAML frontmatter parsing
 - `zod` - Schema validation
 - `jose` - JWT token verification
 - `resend` - Email delivery service for team invitations
-- `@react-email/components` - Email template components
 - `lucide-react` - Icons (1.5px stroke weight per branding)
