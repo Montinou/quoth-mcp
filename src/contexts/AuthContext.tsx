@@ -121,7 +121,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (session?.user) {
           // Create new abort controller for this fetch
           abortControllerRef.current = new AbortController();
-          await fetchProfile(session.user.id, abortControllerRef.current.signal);
+          try {
+            await fetchProfile(session.user.id, abortControllerRef.current.signal);
+          } catch (err) {
+            // Ignore AbortError - expected when auth state changes rapidly
+            if (err instanceof Error && err.name === 'AbortError') {
+              return;
+            }
+            console.error('[AuthContext] Profile fetch error in onAuthStateChange:', err);
+          }
         } else {
           setProfile(null);
           setProfileLoading(false);
@@ -132,8 +140,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => {
       mounted = false;
       subscription.unsubscribe();
-      // Note: We don't abort on cleanup because React 18 strict mode would abort
-      // the initial fetch during double-mount. The mounted flag prevents state updates.
+      // Abort any in-flight requests on cleanup
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+        abortControllerRef.current = null;
+      }
     };
   }, [supabase]);
 
