@@ -16,6 +16,12 @@ import {
 import { supabase } from '../supabase';
 import { registerGenesisTools } from './genesis';
 import { syncDocument } from '../sync';
+import * as fs from 'fs';
+import * as path from 'path';
+import matter from 'gray-matter';
+
+// Templates directory path (relative to project root)
+const TEMPLATES_DIR = path.join(process.cwd(), 'quoth-knowledge-template', 'templates');
 
 /**
  * Register all Quoth tools on an MCP server with authentication context
@@ -397,12 +403,13 @@ The proposal has been logged for human review. A maintainer will review and appr
   );
 
   // Tool 4: quoth_list_templates
+  // Reads templates from filesystem (not indexed in database)
   server.registerTool(
     'quoth_list_templates',
     {
       title: 'List Document Templates',
       description:
-        'Lists available document templates by category. Templates are chunk-optimized structures for creating well-indexed documentation.',
+        'Lists available document templates by category. Templates are chunk-optimized structures for creating well-indexed documentation. Templates are stored in the filesystem, not the database.',
       inputSchema: {
         category: z.enum(['all', 'architecture', 'patterns', 'contracts']).optional()
           .describe('Filter by category. Use "all" or omit to list all templates.'),
@@ -410,55 +417,66 @@ The proposal has been logged for human review. A maintainer will review and appr
     },
     async ({ category }) => {
       try {
-        // Query templates from the database
-        let query = supabase
-          .from('documents')
-          .select('id, file_path, title, content')
-          .eq('project_id', authContext.project_id)
-          .like('file_path', 'templates/%');
+        // Read templates from filesystem
+        const categories = category && category !== 'all'
+          ? [category]
+          : ['architecture', 'patterns', 'contracts'];
 
-        // Filter by category if specified
-        if (category && category !== 'all') {
-          query = query.like('file_path', `templates/${category}/%`);
+        interface TemplateInfo {
+          title: string;
+          filePath: string;
+          category: string;
+          purpose: string;
+          targetType: string;
         }
 
-        const { data: templates, error } = await query;
+        const templates: TemplateInfo[] = [];
 
-        if (error) {
-          throw new Error(`Failed to list templates: ${error.message}`);
+        for (const cat of categories) {
+          const catDir = path.join(TEMPLATES_DIR, cat);
+
+          if (!fs.existsSync(catDir)) continue;
+
+          const files = fs.readdirSync(catDir).filter(f => f.endsWith('.md'));
+
+          for (const file of files) {
+            const filePath = path.join(catDir, file);
+            const content = fs.readFileSync(filePath, 'utf-8');
+            const { data: frontmatter, content: body } = matter(content);
+
+            // Extract purpose from first paragraph after ## Purpose
+            const purposeMatch = body.match(/## Purpose[^#]*?\n\n([^\n]+)/);
+            const purpose = purposeMatch ? purposeMatch[1].slice(0, 150) : 'No purpose defined';
+
+            templates.push({
+              title: frontmatter.id || file.replace('.md', ''),
+              filePath: `templates/${cat}/${file}`,
+              category: cat,
+              purpose,
+              targetType: frontmatter.target_type || 'unknown',
+            });
+          }
         }
 
-        if (!templates || templates.length === 0) {
+        if (templates.length === 0) {
           return {
             content: [{
               type: 'text' as const,
               text: `No templates found${category && category !== 'all' ? ` in category "${category}"` : ''}.
 
-Templates are stored in the \`templates/\` directory. To add templates:
-1. Create markdown files in \`templates/{category}/\`
-2. Run genesis to index them`,
+Templates are stored in \`quoth-knowledge-template/templates/\`.
+Available categories: architecture, patterns, contracts`,
             }],
           };
         }
 
-        // Extract purpose from each template (first paragraph after ## Purpose)
-        const extractPurpose = (content: string): string => {
-          const match = content.match(/## Purpose[^#]*?\n\n([^\n]+)/);
-          return match ? match[1].slice(0, 150) : 'No purpose defined';
-        };
-
-        // Extract category from path
-        const extractCategory = (path: string): string => {
-          const parts = path.split('/');
-          return parts.length >= 2 ? parts[1] : 'unknown';
-        };
-
         const formattedTemplates = templates.map((t, index) => `
 <template index="${index + 1}">
   <id>${t.title}</id>
-  <path>${t.file_path}</path>
-  <category>${extractCategory(t.file_path)}</category>
-  <purpose>${extractPurpose(t.content)}</purpose>
+  <path>${t.filePath}</path>
+  <category>${t.category}</category>
+  <target_type>${t.targetType}</target_type>
+  <purpose>${t.purpose}</purpose>
 </template>`).join('\n');
 
         return {
@@ -471,7 +489,8 @@ ${formattedTemplates}
 **Usage:**
 - Use \`quoth_get_template\` with the template path to fetch full content
 - Templates are chunk-optimized for embedding (each H2 = one chunk)
-- Follow template structure exactly for best search results`,
+- Follow template structure exactly for best search results
+- Optimal section size: 75-300 tokens (~58-231 words)`,
           }],
         };
       } catch (error) {
@@ -486,12 +505,13 @@ ${formattedTemplates}
   );
 
   // Tool 5: quoth_get_template
+  // Reads templates from filesystem (not indexed in database)
   server.registerTool(
     'quoth_get_template',
     {
       title: 'Get Document Template',
       description:
-        'Retrieves a specific document template with full structure, examples, and embedding hints. Use templates to create well-indexed documentation.',
+        'Retrieves a specific document template with full structure, examples, and embedding hints. Use templates to create well-indexed documentation. Templates are stored in the filesystem.',
       inputSchema: {
         template_id: z.string()
           .describe('Template path or ID, e.g. "templates/architecture/project-overview.md" or "project-overview"'),
@@ -499,36 +519,45 @@ ${formattedTemplates}
     },
     async ({ template_id }) => {
       try {
-        // Try to find template by path or title
-        let query = supabase
-          .from('documents')
-          .select('id, file_path, title, content')
-          .eq('project_id', authContext.project_id)
-          .like('file_path', 'templates/%');
+        // Helper to find all template files
+        const findAllTemplates = (): Array<{ filePath: string; fullPath: string }> => {
+          const templates: Array<{ filePath: string; fullPath: string }> = [];
+          const categories = ['architecture', 'patterns', 'contracts'];
 
-        // If full path provided, use exact match
+          for (const cat of categories) {
+            const catDir = path.join(TEMPLATES_DIR, cat);
+            if (!fs.existsSync(catDir)) continue;
+
+            const files = fs.readdirSync(catDir).filter(f => f.endsWith('.md'));
+            for (const file of files) {
+              templates.push({
+                filePath: `templates/${cat}/${file}`,
+                fullPath: path.join(catDir, file),
+              });
+            }
+          }
+          return templates;
+        };
+
+        const allTemplates = findAllTemplates();
+        let foundTemplate: { filePath: string; fullPath: string } | undefined;
+
+        // Try to find by exact path
         if (template_id.startsWith('templates/')) {
-          query = query.eq('file_path', template_id);
-        } else {
-          // Otherwise search by title or partial path
-          query = query.or(`title.ilike.%${template_id}%,file_path.ilike.%${template_id}%`);
+          foundTemplate = allTemplates.find(t => t.filePath === template_id);
         }
 
-        const { data: templates, error } = await query;
-
-        if (error) {
-          throw new Error(`Failed to get template: ${error.message}`);
+        // Try to find by filename or partial match
+        if (!foundTemplate) {
+          const searchTerm = template_id.toLowerCase().replace('.md', '');
+          foundTemplate = allTemplates.find(t =>
+            t.filePath.toLowerCase().includes(searchTerm) ||
+            path.basename(t.filePath, '.md').toLowerCase() === searchTerm
+          );
         }
 
-        if (!templates || templates.length === 0) {
-          // Try to suggest similar templates
-          const { data: allTemplates } = await supabase
-            .from('documents')
-            .select('file_path, title')
-            .eq('project_id', authContext.project_id)
-            .like('file_path', 'templates/%');
-
-          const suggestions = allTemplates?.slice(0, 5).map(t => `- ${t.file_path}`).join('\n') || 'No templates available';
+        if (!foundTemplate) {
+          const suggestions = allTemplates.slice(0, 5).map(t => `- ${t.filePath}`).join('\n');
 
           return {
             content: [{
@@ -543,19 +572,24 @@ Use \`quoth_list_templates\` to see all available templates.`,
           };
         }
 
-        // Use first match if multiple found
-        const template = templates[0];
+        // Read and parse the template
+        const content = fs.readFileSync(foundTemplate.fullPath, 'utf-8');
+        const { data: frontmatter } = matter(content);
+
+        const title = frontmatter.id || path.basename(foundTemplate.filePath, '.md');
 
         return {
           content: [{
             type: 'text' as const,
-            text: `## Template: ${template.title}
+            text: `## Template: ${title}
 
-**Path:** \`${template.file_path}\`
+**Path:** \`${foundTemplate.filePath}\`
+**Category:** ${frontmatter.category || 'unknown'}
+**Target Type:** ${frontmatter.target_type || 'unknown'}
 
 ---
 
-${template.content}
+${content}
 
 ---
 
@@ -564,7 +598,8 @@ ${template.content}
 - Optimal section size: 75-300 tokens (~58-231 words)
 - Frontmatter keywords are injected into all chunks as prefix
 - Use aliases in headers: \`## Topic (Alias1, Alias2)\`
-- End each section with \`**Summary:**\` for chunk closure`,
+- End each section with \`**Summary:**\` for chunk closure
+- Include 4-6 FAQ items per document for searchability`,
           }],
         };
       } catch (error) {
