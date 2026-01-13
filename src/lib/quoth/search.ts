@@ -101,7 +101,7 @@ function transformMatchToDocRef(match: MatchResult, score?: number): DocumentRef
     type: inferDocumentType(match.file_path),
     path: match.file_path,
     relevance: score ?? match.similarity,
-    snippet: truncateSnippet(match.content_chunk, 300), // Slightly longer snippet
+    snippet: truncateSnippet(match.content_chunk, 400), // Optimized for context visibility
   };
 }
 
