@@ -12,6 +12,7 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { AuthContext } from '../auth/mcp-auth';
+import { FRONTMATTER_TEMPLATE } from './prompt-constants';
 
 /**
  * Shared embedding optimization rules (compact version)
@@ -36,17 +37,7 @@ const EMBEDDING_RULES = `<embedding_rules>
   </faq_format>
 </embedding_rules>`;
 
-/**
- * Shared document frontmatter template
- */
-const FRONTMATTER_TEMPLATE = `---
-id: [category]-[name]
-type: [architecture|testing-pattern|contract|meta]
-status: active
-last_updated_date: [YYYY-MM-DD]
-keywords: [3-5 searchable terms]
-related_stack: [tech1, tech2]
----`;
+// FRONTMATTER_TEMPLATE imported from './prompt-constants'
 
 /**
  * Upload protocol (shared)
