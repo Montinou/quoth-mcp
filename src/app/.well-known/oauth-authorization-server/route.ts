@@ -30,9 +30,7 @@ export async function GET() {
         issuer: SUPABASE_URL,
         authorization_endpoint: `${SUPABASE_URL}/auth/v1/authorize`,
         token_endpoint: `${SUPABASE_URL}/auth/v1/token`,
-
-        // Dynamic Client Registration not supported by Supabase OAuth Server
-        // Clients must be registered in Supabase dashboard
+        registration_endpoint: `${SUPABASE_URL}/auth/v1/oauth/register`,
 
         // Supported features
         response_types_supported: ['code'],
