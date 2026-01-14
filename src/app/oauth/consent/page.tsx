@@ -78,14 +78,26 @@ function ConsentForm() {
           return;
         }
 
-        // Get authorization details from Supabase OAuth
-        const { data, error: oauthError } =
-          await supabase.auth.oauth.getAuthorizationDetails(authorizationId);
+        // Get authorization details from Supabase OAuth with timeout
+        console.log('[Consent] Fetching authorization details for:', authorizationId);
+
+        const timeoutPromise = new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('Authorization details request timed out after 10s')), 10000)
+        );
+
+        const { data, error: oauthError } = await Promise.race([
+          supabase.auth.oauth.getAuthorizationDetails(authorizationId),
+          timeoutPromise
+        ]).catch(err => ({ data: null, error: err })) as { data: unknown; error: Error | null };
+
+        console.log('[Consent] Authorization response:', { data, error: oauthError });
 
         if (!mounted) return;
 
         if (oauthError || !data) {
-          setError(oauthError?.message || 'Failed to get authorization details');
+          const errorMsg = oauthError?.message || 'Failed to get authorization details';
+          console.error('[Consent] Authorization error:', errorMsg);
+          setError(errorMsg);
           setLoading(false);
           return;
         }
