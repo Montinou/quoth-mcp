@@ -28,8 +28,10 @@ async function verifySupabaseToken(token: string): Promise<AuthContext | null> {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
+  console.log('[MCP Auth] Verifying Supabase token...');
+
   if (!supabaseUrl || !supabaseServiceKey) {
-    console.error('Supabase configuration missing');
+    console.error('[MCP Auth] Supabase configuration missing');
     return null;
   }
 
@@ -42,21 +44,31 @@ async function verifySupabaseToken(token: string): Promise<AuthContext | null> {
     });
 
     // Verify token with Supabase
+    console.log('[MCP Auth] Calling supabase.auth.getUser...');
     const {
       data: { user },
       error,
     } = await supabase.auth.getUser(token);
 
+    console.log('[MCP Auth] getUser result:', { user: user?.id, error: error?.message });
+
     if (error || !user) {
+      console.error('[MCP Auth] Token verification failed:', error?.message || 'No user');
       return null;
     }
+
+    // Log full app_metadata for debugging
+    console.log('[MCP Auth] User app_metadata:', JSON.stringify(user.app_metadata, null, 2));
 
     // Extract claims injected by Custom Access Token Hook
     const projectId = user.app_metadata?.project_id;
     const role = user.app_metadata?.mcp_role;
 
+    console.log('[MCP Auth] Extracted claims:', { projectId, role });
+
     if (!projectId) {
-      console.warn('Supabase token missing project_id in app_metadata');
+      console.warn('[MCP Auth] Supabase token missing project_id in app_metadata');
+      console.warn('[MCP Auth] Full user object:', JSON.stringify(user, null, 2));
       return null;
     }
 
@@ -67,7 +79,7 @@ async function verifySupabaseToken(token: string): Promise<AuthContext | null> {
       label: user.email,
     };
   } catch (error) {
-    console.error('Supabase token verification failed:', error);
+    console.error('[MCP Auth] Supabase token verification failed:', error);
     return null;
   }
 }
@@ -114,32 +126,44 @@ async function verifyCustomJwt(token: string): Promise<AuthContext | null> {
  * Returns AuthContext if valid, null otherwise
  */
 export async function verifyMcpApiKey(token: string): Promise<AuthContext | null> {
+  console.log('[MCP Auth] verifyMcpApiKey called, token length:', token?.length);
+  console.log('[MCP Auth] Token preview:', token?.substring(0, 50) + '...');
+
   // Try to determine token type by decoding without verification
   try {
     const decoded = decodeJwt(token);
+    console.log('[MCP Auth] Decoded JWT:', { iss: decoded.iss, aud: decoded.aud, sub: decoded.sub });
 
     // Check if it's a custom JWT (has our specific issuer/audience)
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://quoth.ai-innovation.site';
     if (decoded.iss === appUrl && decoded.aud === 'mcp-server') {
+      console.log('[MCP Auth] Detected custom JWT, verifying...');
       return verifyCustomJwt(token);
     }
 
     // Check if it's a Supabase token (issuer matches Supabase URL pattern)
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     if (supabaseUrl && decoded.iss?.includes('supabase')) {
+      console.log('[MCP Auth] Detected Supabase token, verifying...');
       return verifySupabaseToken(token);
     }
-  } catch {
+
+    console.log('[MCP Auth] Token type not determined from issuer, trying both methods');
+  } catch (err) {
+    console.log('[MCP Auth] Could not decode token as JWT:', err);
     // Token couldn't be decoded, try both methods
   }
 
   // Try custom JWT first (faster, no network call)
+  console.log('[MCP Auth] Trying custom JWT verification...');
   const customAuth = await verifyCustomJwt(token);
   if (customAuth) {
+    console.log('[MCP Auth] Custom JWT verified successfully');
     return customAuth;
   }
 
   // Fall back to Supabase verification
+  console.log('[MCP Auth] Custom JWT failed, trying Supabase verification...');
   return verifySupabaseToken(token);
 }
 
