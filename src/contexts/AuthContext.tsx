@@ -61,6 +61,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const { data: { user: serverUser }, error } = await supabase.auth.getUser();
 
+      // Ignore AbortError - it's expected during React StrictMode remounts
+      if (error) {
+        if (error.message?.includes('AbortError') || error.name === 'AbortError') {
+          return;
+        }
+      }
+
       if (error || !serverUser) {
         // Server says session is invalid - clear client state
         if (user) {
@@ -82,18 +89,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const { data: { session: freshSession } } = await supabase.auth.getSession();
         setSession(freshSession);
         if (serverUser.id) {
-          abortControllerRef.current?.abort();
-          abortControllerRef.current = new AbortController();
-          await fetchProfile(serverUser.id, abortControllerRef.current.signal);
+          // Create new controller only if we're about to fetch
+          const controller = new AbortController();
+          abortControllerRef.current = controller;
+          await fetchProfile(serverUser.id, controller.signal);
         }
       } else if (!profile && user && !profileLoading && !profileError) {
         // User exists but profile is missing - retry fetch
         console.log('[AuthContext] Profile missing, retrying fetch');
-        abortControllerRef.current?.abort();
-        abortControllerRef.current = new AbortController();
-        await fetchProfile(user.id, abortControllerRef.current.signal);
+        const controller = new AbortController();
+        abortControllerRef.current = controller;
+        await fetchProfile(user.id, controller.signal);
       }
     } catch (err) {
+      // Ignore AbortError - it's expected during React StrictMode unmount/remount
+      if (err instanceof Error && (err.name === 'AbortError' || err.message?.includes('aborted'))) {
+        return;
+      }
       console.error('[AuthContext] Session revalidation error:', err);
     }
   }, [user, profile, profileLoading, profileError, supabase]);
@@ -162,9 +174,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       async (_event, session) => {
         if (!mounted) return;
 
-        // Abort any in-flight profile fetch
-        if (abortControllerRef.current) {
-          abortControllerRef.current.abort();
+        // Abort any in-flight profile fetch (safely)
+        try {
+          abortControllerRef.current?.abort();
+        } catch {
+          // Ignore abort errors
         }
 
         setSession(session);
@@ -172,12 +186,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         if (session?.user) {
           // Create new abort controller for this fetch
-          abortControllerRef.current = new AbortController();
+          const controller = new AbortController();
+          abortControllerRef.current = controller;
           try {
-            await fetchProfile(session.user.id, abortControllerRef.current.signal);
+            await fetchProfile(session.user.id, controller.signal);
           } catch (err) {
             // Ignore AbortError - expected when auth state changes rapidly
-            if (err instanceof Error && err.name === 'AbortError') {
+            if (err instanceof Error && (err.name === 'AbortError' || err.message?.includes('aborted'))) {
               return;
             }
             console.error('[AuthContext] Profile fetch error in onAuthStateChange:', err);
@@ -192,11 +207,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => {
       mounted = false;
       subscription.unsubscribe();
-      // Abort any in-flight requests on cleanup
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
-        abortControllerRef.current = null;
+      // Abort any in-flight requests on cleanup (safely)
+      try {
+        abortControllerRef.current?.abort();
+      } catch {
+        // Ignore abort errors during cleanup
       }
+      abortControllerRef.current = null;
     };
   }, [supabase]);
 
