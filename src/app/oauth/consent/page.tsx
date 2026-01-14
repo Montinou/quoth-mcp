@@ -74,12 +74,14 @@ function ConsentForm() {
           return;
         }
 
+        // Extract client info from Supabase OAuth response
+        const client = data.client as { id?: string; name?: string } | undefined;
         setAuthDetails({
-          client_id: data.client_id,
-          client_name: data.client_name || data.client_id,
-          redirect_uri: data.redirect_uri,
-          scopes: data.scopes || [],
-          state: data.state,
+          client_id: client?.id || 'unknown',
+          client_name: client?.name || client?.id || 'Unknown Application',
+          redirect_uri: (data as { redirect_uri?: string }).redirect_uri || '',
+          scopes: (data as { scopes?: string[] }).scopes || [],
+          state: (data as { state?: string }).state,
         });
         setLoading(false);
       } catch (err) {
