@@ -11,13 +11,13 @@
  *
  * Features:
  * - 3 Tools: quoth_search_index, quoth_read_doc, quoth_propose_update
- * - 2 Prompts: quoth_architect, quoth_auditor
+ * - 3 Prompts: quoth_architect, quoth_auditor, quoth_documenter
  */
 
 import { createMcpHandler } from 'mcp-handler';
 import { verifySseToken, createSseAuthErrorResponse } from '@/lib/auth/sse-auth';
 import { registerQuothTools } from '@/lib/quoth/tools';
-import { getArchitectPrompt, getAuditorPrompt } from '@/lib/quoth/prompts';
+import { getArchitectPrompt, getAuditorPrompt, getDocumenterPrompt } from '@/lib/quoth/prompts';
 import type { NextRequest } from 'next/server';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { AuthContext } from '@/lib/auth/mcp-auth';
@@ -46,6 +46,15 @@ function setupServer(server: McpServer, authContext: AuthContext) {
         'Initialize the session for reviewing code and updating documentation.',
     },
     async () => getAuditorPrompt()
+  );
+
+  server.registerPrompt(
+    'quoth_documenter',
+    {
+      description:
+        'Initialize the session for proactive incremental documentation. Use when documenting new code as you build.',
+    },
+    async () => getDocumenterPrompt()
   );
 }
 

@@ -8,7 +8,7 @@
  * - No authentication required (public demo)
  * - Read-only access to quoth-knowledge-base project
  * - 2 Tools: quoth_search_index, quoth_read_doc (no propose_update)
- * - 2 Prompts: quoth_architect, quoth_auditor
+ * - 3 Prompts: quoth_architect, quoth_auditor, quoth_documenter
  *
  * Usage:
  * claude add quoth  # Installs with public access
@@ -18,7 +18,7 @@
 import { createMcpHandler } from 'mcp-handler';
 import { z } from 'zod';
 import { searchDocuments, readDocument } from '@/lib/quoth/search';
-import { getArchitectPrompt, getAuditorPrompt } from '@/lib/quoth/prompts';
+import { getArchitectPrompt, getAuditorPrompt, getDocumenterPrompt } from '@/lib/quoth/prompts';
 
 // Public demo project ID
 const PUBLIC_PROJECT_ID = 'quoth-knowledge-base';
@@ -149,6 +149,16 @@ const handler = createMcpHandler(
           'Initialize the session for reviewing code and updating documentation. Activates strict contrast rules between code and docs.',
       },
       async () => getAuditorPrompt()
+    );
+
+    // Prompt 3: Documenter (Public - read-only demo)
+    server.registerPrompt(
+      'quoth_documenter',
+      {
+        description:
+          'Initialize the session for proactive incremental documentation. Use when you want to document new code. (Public demo: proposals require account)',
+      },
+      async () => getDocumenterPrompt()
     );
   },
   {},

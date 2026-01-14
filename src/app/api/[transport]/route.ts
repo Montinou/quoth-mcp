@@ -8,7 +8,7 @@
  * - OAuth 2.1 authentication via MCP API keys or OAuth tokens
  * - Proper WWW-Authenticate headers for OAuth discovery
  * - 3 Tools: quoth_search_index, quoth_read_doc, quoth_propose_update
- * - 2 Prompts: quoth_architect, quoth_auditor
+ * - 3 Prompts: quoth_architect, quoth_auditor, quoth_documenter
  *
  * Authentication:
  * - Requires Bearer token in Authorization header
@@ -18,7 +18,7 @@
 
 import { createMcpHandler, withMcpAuth } from 'mcp-handler';
 import { registerQuothTools } from '@/lib/quoth/tools';
-import { getArchitectPrompt, getAuditorPrompt } from '@/lib/quoth/prompts';
+import { getArchitectPrompt, getAuditorPrompt, getDocumenterPrompt } from '@/lib/quoth/prompts';
 import { verifyMcpApiKey, type AuthContext } from '@/lib/auth/mcp-auth';
 import type { AuthInfo } from '@modelcontextprotocol/sdk/server/auth/types.js';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
@@ -99,6 +99,15 @@ function setupServer(server: McpServer, authContext: AuthContext) {
         'Initialize the session for reviewing code and updating documentation. Activates strict contrast rules between code and docs.',
     },
     async () => getAuditorPrompt()
+  );
+
+  server.registerPrompt(
+    'quoth_documenter',
+    {
+      description:
+        'Initialize the session for proactive incremental documentation. Use when you want to document new code as you build. Say "document this [code/feature]" to trigger.',
+    },
+    async () => getDocumenterPrompt()
   );
 }
 
