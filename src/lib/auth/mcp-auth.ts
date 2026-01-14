@@ -1,10 +1,11 @@
 /**
  * MCP Authentication Middleware
- * Wraps MCP handlers with JWT-based authentication
+ * Supports both Supabase OAuth tokens and manual API keys
  */
 
 import { createMcpHandler } from 'mcp-handler';
-import { jwtVerify } from 'jose';
+import { jwtVerify, decodeJwt } from 'jose';
+import { createClient } from '@supabase/supabase-js';
 import type { NextRequest } from 'next/server';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
@@ -20,15 +21,63 @@ export interface AuthContext {
 }
 
 /**
- * Verify an MCP API key (custom JWT token)
- * Returns AuthContext if valid, null otherwise
- * Now also handles OAuth-issued tokens (type: 'mcp')
+ * Verify a Supabase OAuth token
+ * Claims are in app_metadata (injected by Custom Access Token Hook)
  */
-export async function verifyMcpApiKey(token: string): Promise<AuthContext | null> {
-  // Try JWT_SECRET first, fall back to SUPABASE_JWT_SECRET
-  const jwtSecret = process.env.JWT_SECRET || process.env.SUPABASE_JWT_SECRET;
+async function verifySupabaseToken(token: string): Promise<AuthContext | null> {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!supabaseUrl || !supabaseServiceKey) {
+    console.error('Supabase configuration missing');
+    return null;
+  }
+
+  try {
+    const supabase = createClient(supabaseUrl, supabaseServiceKey, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false,
+      },
+    });
+
+    // Verify token with Supabase
+    const {
+      data: { user },
+      error,
+    } = await supabase.auth.getUser(token);
+
+    if (error || !user) {
+      return null;
+    }
+
+    // Extract claims injected by Custom Access Token Hook
+    const projectId = user.app_metadata?.project_id;
+    const role = user.app_metadata?.mcp_role;
+
+    if (!projectId) {
+      console.warn('Supabase token missing project_id in app_metadata');
+      return null;
+    }
+
+    return {
+      project_id: projectId,
+      user_id: user.id,
+      role: (role as 'admin' | 'editor' | 'viewer') || 'viewer',
+      label: user.email,
+    };
+  } catch (error) {
+    console.error('Supabase token verification failed:', error);
+    return null;
+  }
+}
+
+/**
+ * Verify a custom JWT token (manual API keys)
+ */
+async function verifyCustomJwt(token: string): Promise<AuthContext | null> {
+  const jwtSecret = process.env.JWT_SECRET;
   if (!jwtSecret) {
-    console.error('No JWT_SECRET or SUPABASE_JWT_SECRET configured');
     return null;
   }
 
@@ -39,58 +88,68 @@ export async function verifyMcpApiKey(token: string): Promise<AuthContext | null
       audience: 'mcp-server',
     });
 
-    // Handle OAuth-issued tokens (type: 'mcp')
-    if (payload.type === 'mcp') {
-      const authContext: AuthContext = {
-        project_id: payload.sub as string,
-        user_id: payload.user_id as string,
-        role: (payload.role as 'admin' | 'editor' | 'viewer') || 'viewer',
-        label: payload.email as string | undefined,
-      };
-
-      if (!authContext.project_id || !authContext.user_id) {
-        return null;
-      }
-
-      return authContext;
-    }
-
-    // Handle regular MCP API key tokens
     const authContext: AuthContext = {
       project_id: payload.sub as string,
       user_id: payload.user_id as string,
-      role: payload.role as 'admin' | 'editor' | 'viewer',
-      label: payload.label as string | undefined,
+      role: (payload.role as 'admin' | 'editor' | 'viewer') || 'viewer',
+      label: (payload.label as string) || (payload.email as string),
     };
 
-    // Validate required fields
-    if (!authContext.project_id || !authContext.user_id || !authContext.role) {
+    if (!authContext.project_id || !authContext.user_id) {
       return null;
     }
 
-    // Validate role
     if (!['admin', 'editor', 'viewer'].includes(authContext.role)) {
       return null;
     }
 
     return authContext;
-  } catch (error) {
-    // Token verification failed
+  } catch {
     return null;
   }
 }
 
 /**
+ * Verify an MCP token (supports both Supabase OAuth and custom JWT)
+ * Returns AuthContext if valid, null otherwise
+ */
+export async function verifyMcpApiKey(token: string): Promise<AuthContext | null> {
+  // Try to determine token type by decoding without verification
+  try {
+    const decoded = decodeJwt(token);
+
+    // Check if it's a custom JWT (has our specific issuer/audience)
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://quoth.ai-innovation.site';
+    if (decoded.iss === appUrl && decoded.aud === 'mcp-server') {
+      return verifyCustomJwt(token);
+    }
+
+    // Check if it's a Supabase token (issuer matches Supabase URL pattern)
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    if (supabaseUrl && decoded.iss?.includes('supabase')) {
+      return verifySupabaseToken(token);
+    }
+  } catch {
+    // Token couldn't be decoded, try both methods
+  }
+
+  // Try custom JWT first (faster, no network call)
+  const customAuth = await verifyCustomJwt(token);
+  if (customAuth) {
+    return customAuth;
+  }
+
+  // Fall back to Supabase verification
+  return verifySupabaseToken(token);
+}
+
+/**
  * Creates an authenticated MCP handler
  * Extracts and verifies JWT token before allowing access to MCP tools
- *
- * @param setupFn - Function that registers MCP tools/prompts with auth context
- * @param options - Additional options for mcp-handler
- * @returns Next.js route handler with authentication
  */
 export function createAuthenticatedMcpHandler(
   setupFn: (server: McpServer, authContext: AuthContext) => void,
-  options?: any
+  options?: Record<string, unknown>
 ) {
   return async (req: NextRequest) => {
     try {
@@ -111,62 +170,14 @@ export function createAuthenticatedMcpHandler(
 
       const token = authHeader.substring(7); // Remove 'Bearer ' prefix
 
-      // 2. Verify JWT token
-      if (!process.env.JWT_SECRET) {
-        console.error('JWT_SECRET is not configured');
-        return new Response(
-          JSON.stringify({
-            error: 'Server configuration error',
-            message: 'JWT secret not configured',
-          }),
-          {
-            status: 500,
-            headers: { 'Content-Type': 'application/json' },
-          }
-        );
-      }
+      // 2. Verify token (supports both Supabase OAuth and custom JWT)
+      const authContext = await verifyMcpApiKey(token);
 
-      const secret = new TextEncoder().encode(process.env.JWT_SECRET);
-      let authContext: AuthContext;
-
-      try {
-        const { payload } = await jwtVerify(token, secret, {
-          issuer: process.env.NEXT_PUBLIC_APP_URL || 'https://quoth.ai-innovation.site',
-          audience: 'mcp-server',
-        });
-
-        // 3. Extract auth context from JWT payload
-        authContext = {
-          project_id: payload.sub as string,
-          user_id: payload.user_id as string,
-          role: payload.role as 'admin' | 'editor' | 'viewer',
-          label: payload.label as string | undefined,
-        };
-
-        // Validate required fields
-        if (!authContext.project_id || !authContext.user_id || !authContext.role) {
-          throw new Error('Invalid token payload: missing required fields');
-        }
-
-        // Validate role
-        if (!['admin', 'editor', 'viewer'].includes(authContext.role)) {
-          throw new Error('Invalid token payload: invalid role');
-        }
-      } catch (error: any) {
-        console.error('JWT verification failed:', error.message);
-
-        // Determine error type for better user feedback
-        let message = 'Invalid or expired token';
-        if (error.code === 'ERR_JWT_EXPIRED') {
-          message = 'Token has expired. Please generate a new token from the dashboard.';
-        } else if (error.code === 'ERR_JWS_SIGNATURE_VERIFICATION_FAILED') {
-          message = 'Token signature verification failed. Token may be corrupted.';
-        }
-
+      if (!authContext) {
         return new Response(
           JSON.stringify({
             error: 'Authentication failed',
-            message,
+            message: 'Invalid or expired token. Please re-authenticate.',
           }),
           {
             status: 401,
@@ -175,14 +186,14 @@ export function createAuthenticatedMcpHandler(
         );
       }
 
-      // 4. Create MCP handler with authenticated context
+      // 3. Create MCP handler with authenticated context
       const handler = createMcpHandler(
         (server) => setupFn(server, authContext),
         {},
         options
       );
 
-      // 5. Call the handler with the request
+      // 4. Call the handler with the request
       return handler(req);
     } catch (error) {
       console.error('MCP auth middleware error:', error);

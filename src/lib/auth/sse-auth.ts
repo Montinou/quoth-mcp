@@ -1,14 +1,13 @@
 /**
  * SSE-specific Authentication Middleware
  * Supports both query param and header-based JWT authentication
- * 
+ *
  * EventSource API cannot set custom headers, so SSE connections
  * must support token extraction from query parameters.
  */
 
-import { jwtVerify } from 'jose';
 import type { NextRequest } from 'next/server';
-import type { AuthContext } from './mcp-auth';
+import { verifyMcpApiKey, type AuthContext } from './mcp-auth';
 
 /**
  * Extracts JWT token from request
@@ -33,65 +32,17 @@ function extractToken(req: NextRequest): string | null {
 
 /**
  * Verifies JWT token and returns auth context
- * Handles both MCP API keys and OAuth tokens
+ * Handles both Supabase OAuth tokens and custom API keys
  */
 export async function verifySseToken(req: NextRequest): Promise<AuthContext | null> {
   const token = extractToken(req);
-  
+
   if (!token) {
     return null;
   }
 
-  // Try JWT_SECRET first, fall back to SUPABASE_JWT_SECRET
-  const jwtSecret = process.env.JWT_SECRET || process.env.SUPABASE_JWT_SECRET;
-  if (!jwtSecret) {
-    console.error('JWT_SECRET or SUPABASE_JWT_SECRET is not configured');
-    return null;
-  }
-
-  try {
-    const secret = new TextEncoder().encode(jwtSecret);
-    const { payload } = await jwtVerify(token, secret, {
-      issuer: process.env.NEXT_PUBLIC_APP_URL || 'https://quoth.ai-innovation.site',
-      audience: 'mcp-server',
-    });
-
-    // Handle OAuth tokens (type: 'mcp')
-    if (payload.type === 'mcp') {
-      return {
-        project_id: payload.sub as string,
-        user_id: payload.user_id as string,
-        role: (payload.role as 'admin' | 'editor' | 'viewer') || 'viewer',
-        label: payload.email as string | undefined,
-      };
-    }
-
-    // Handle regular MCP API keys
-    const authContext: AuthContext = {
-      project_id: payload.sub as string,
-      user_id: payload.user_id as string,
-      role: payload.role as 'admin' | 'editor' | 'viewer',
-      label: payload.label as string | undefined,
-    };
-
-    // Validate required fields
-    if (!authContext.project_id || !authContext.user_id || !authContext.role) {
-      console.error('Invalid token payload: missing required fields');
-      return null;
-    }
-
-    // Validate role
-    if (!['admin', 'editor', 'viewer'].includes(authContext.role)) {
-      console.error('Invalid token payload: invalid role');
-      return null;
-    }
-
-    return authContext;
-  } catch (error: unknown) {
-    const err = error as { code?: string; message?: string };
-    console.error('SSE JWT verification failed:', err.message);
-    return null;
-  }
+  // Use shared verification logic that supports both token types
+  return verifyMcpApiKey(token);
 }
 
 /**
