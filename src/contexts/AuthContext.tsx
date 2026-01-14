@@ -2,13 +2,14 @@
  * Authentication Context
  * Manages user authentication state, session, and profile
  * Uses Supabase Auth with cookie-based sessions
- * 
+ *
  * Session refresh is handled by middleware - this context only tracks state
+ * Visibility-based re-validation syncs client state with server cookies
  */
 
 'use client';
 
-import { createContext, useContext, useEffect, useState, useRef } from 'react';
+import { createContext, useContext, useEffect, useState, useRef, useCallback } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import type { User, Session } from '@supabase/supabase-js';
 
@@ -45,6 +46,57 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [profileError, setProfileError] = useState<string | null>(null);
   const [supabase] = useState(() => createClient());
   const abortControllerRef = useRef<AbortController | null>(null);
+  const lastVisibilityCheckRef = useRef<number>(0);
+
+  // Re-validate session with server (uses getUser() which validates JWT)
+  // This syncs client state with server-side cookie updates from middleware
+  const revalidateSession = useCallback(async () => {
+    // Throttle: only check once per 5 seconds
+    const now = Date.now();
+    if (now - lastVisibilityCheckRef.current < 5000) {
+      return;
+    }
+    lastVisibilityCheckRef.current = now;
+
+    try {
+      const { data: { user: serverUser }, error } = await supabase.auth.getUser();
+
+      if (error || !serverUser) {
+        // Server says session is invalid - clear client state
+        if (user) {
+          console.log('[AuthContext] Session invalidated by server, clearing state');
+          setUser(null);
+          setProfile(null);
+          setSession(null);
+          setProfileLoading(false);
+          setProfileError(null);
+        }
+        return;
+      }
+
+      // Session is valid - update if user changed or was null
+      if (!user || user.id !== serverUser.id) {
+        console.log('[AuthContext] Syncing user state from server');
+        setUser(serverUser);
+        // Fetch fresh session and profile
+        const { data: { session: freshSession } } = await supabase.auth.getSession();
+        setSession(freshSession);
+        if (serverUser.id) {
+          abortControllerRef.current?.abort();
+          abortControllerRef.current = new AbortController();
+          await fetchProfile(serverUser.id, abortControllerRef.current.signal);
+        }
+      } else if (!profile && user && !profileLoading && !profileError) {
+        // User exists but profile is missing - retry fetch
+        console.log('[AuthContext] Profile missing, retrying fetch');
+        abortControllerRef.current?.abort();
+        abortControllerRef.current = new AbortController();
+        await fetchProfile(user.id, abortControllerRef.current.signal);
+      }
+    } catch (err) {
+      console.error('[AuthContext] Session revalidation error:', err);
+    }
+  }, [user, profile, profileLoading, profileError, supabase]);
 
   useEffect(() => {
     let mounted = true;
@@ -148,7 +200,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, [supabase]);
 
-  // Note: Focus refresh removed - middleware handles session refresh
+  // Visibility-based re-validation: sync with server when tab regains focus
+  // This catches cases where middleware refreshed tokens while tab was hidden
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        revalidateSession();
+      }
+    };
+
+    // Also revalidate on window focus (covers more browser scenarios)
+    const handleFocus = () => {
+      revalidateSession();
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleFocus);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleFocus);
+    };
+  }, [revalidateSession]);
 
   async function fetchProfile(userId: string, abortSignal?: AbortSignal) {
     try {
@@ -158,10 +231,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Check if aborted before fetching
       if (abortSignal?.aborted) return;
 
-      // Verify session is still valid before fetching
-      const { data: { session: currentSession } } = await supabase.auth.getSession();
-      if (!currentSession || currentSession.user?.id !== userId) {
-        console.log('[AuthContext] Session changed, aborting profile fetch');
+      // Verify session is still valid with SERVER (not local cookies)
+      // getUser() validates JWT with Supabase Auth server
+      const { data: { user: validatedUser }, error: authError } = await supabase.auth.getUser();
+      if (authError || !validatedUser || validatedUser.id !== userId) {
+        console.log('[AuthContext] Session invalid or changed, aborting profile fetch');
+        // If session is completely invalid, clear state
+        if (authError || !validatedUser) {
+          setUser(null);
+          setSession(null);
+          setProfile(null);
+        }
         return;
       }
 
