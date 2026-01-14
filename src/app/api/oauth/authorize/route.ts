@@ -20,16 +20,28 @@ export async function GET(request: NextRequest) {
 
   // Get all query parameters from the request
   const searchParams = request.nextUrl.searchParams;
-  
+
+  // Supabase only supports these OpenID scopes
+  const SUPPORTED_SCOPES = ['openid', 'email', 'profile', 'phone'];
+
   // Build Supabase authorize URL with all params
   // Correct endpoint: /auth/v1/oauth/authorize
   const supabaseUrl = new URL(`${SUPABASE_URL}/auth/v1/oauth/authorize`);
-  
-  // Copy all query parameters
+
+  // Copy all query parameters, filtering unsupported scopes
   searchParams.forEach((value, key) => {
-    supabaseUrl.searchParams.set(key, value);
+    if (key === 'scope') {
+      // Filter to only Supabase-supported scopes, default to openid email profile
+      const requestedScopes = value.split(' ');
+      const validScopes = requestedScopes.filter(s => SUPPORTED_SCOPES.includes(s));
+      // If no valid scopes, use defaults
+      const finalScopes = validScopes.length > 0 ? validScopes : ['openid', 'email', 'profile'];
+      supabaseUrl.searchParams.set(key, finalScopes.join(' '));
+    } else {
+      supabaseUrl.searchParams.set(key, value);
+    }
   });
-  
+
   // Add apikey for Supabase
   supabaseUrl.searchParams.set('apikey', SUPABASE_ANON_KEY);
 
