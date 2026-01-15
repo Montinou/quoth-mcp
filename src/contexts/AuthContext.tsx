@@ -107,6 +107,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return;
       }
       console.error('[AuthContext] Session revalidation error:', err);
+      // On unexpected error, clear state to prevent stuck UI
+      // User will need to re-authenticate
+      setUser(null);
+      setProfile(null);
+      setSession(null);
+      setProfileLoading(false);
     }
   }, [user, profile, profileLoading, profileError, supabase]);
 
@@ -138,7 +144,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           // Session was invalid/expired and couldn't refresh
           // Clear stale auth data to prevent stuck state
           console.log('[AuthContext] Clearing stale session data');
-          await supabase.auth.signOut();
+          try {
+            await supabase.auth.signOut();
+          } catch (signOutErr) {
+            // Ignore signOut errors - session is already invalid
+            console.warn('[AuthContext] signOut failed (session already invalid):', signOutErr);
+          }
           setLoading(false);
           return;
         }
