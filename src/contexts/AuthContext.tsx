@@ -103,7 +103,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     } catch (err) {
       // Ignore AbortError - it's expected during React StrictMode unmount/remount
-      if (err instanceof Error && (err.name === 'AbortError' || err.message?.includes('aborted'))) {
+      const isAbortError = err instanceof Error && (
+        err.name === 'AbortError' ||
+        err.message?.includes('abort') ||
+        err.message?.includes('signal')
+      );
+      if (isAbortError) {
         return;
       }
       console.error('[AuthContext] Session revalidation error:', err);
@@ -167,7 +172,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
       } catch (err) {
         // Ignore AbortError - it's expected during unmount (React 18 strict mode)
-        if (err instanceof Error && err.name === 'AbortError') {
+        const isAbortError = err instanceof Error && (
+          err.name === 'AbortError' ||
+          err.message?.includes('abort') ||
+          err.message?.includes('signal')
+        );
+        if (isAbortError) {
           return;
         }
         console.error('[AuthContext] Auth init error:', err);
@@ -203,7 +213,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             await fetchProfile(session.user.id, controller.signal);
           } catch (err) {
             // Ignore AbortError - expected when auth state changes rapidly
-            if (err instanceof Error && (err.name === 'AbortError' || err.message?.includes('aborted'))) {
+            const isAbortError = err instanceof Error && (
+              err.name === 'AbortError' ||
+              err.message?.includes('abort') ||
+              err.message?.includes('signal')
+            );
+            if (isAbortError) {
               return;
             }
             console.error('[AuthContext] Profile fetch error in onAuthStateChange:', err);
@@ -295,10 +310,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     } catch (err) {
       // Ignore AbortError - it's expected when auth state changes
-      if (err instanceof Error && err.name === 'AbortError') {
+      // Check multiple conditions since AbortError can manifest differently
+      const isAbortError = err instanceof Error && (
+        err.name === 'AbortError' ||
+        err.message?.includes('abort') ||
+        err.message?.includes('signal')
+      );
+      if (isAbortError || abortSignal?.aborted) {
         return;
       }
-      if (abortSignal?.aborted) return;
       console.error('[AuthContext] Failed to load profile:', err);
       setProfileError('Failed to load profile');
     } finally {
