@@ -75,7 +75,7 @@ BEGIN
     de.content_chunk,
     COALESCE((de.metadata->>'chunk_index')::int, 0) as chunk_index,
     de.metadata,
-    (SELECT COUNT(*)::int FROM document_embeddings WHERE document_id = de.document_id) as total_chunks
+    (SELECT COUNT(*)::int FROM document_embeddings sub WHERE sub.document_id = de.document_id) as total_chunks
   FROM document_embeddings de
   JOIN documents d ON de.document_id = d.id
   WHERE de.id = ANY(chunk_ids)

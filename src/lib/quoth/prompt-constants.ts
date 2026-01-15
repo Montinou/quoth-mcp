@@ -72,3 +72,54 @@ export const PROPOSAL_BREVITY_RULES = `<brevity_rules>
   4. LINK to existing patterns, never duplicate content
   5. REFERENCE files: \`src/file.ts:45-60\` not full code blocks
 </brevity_rules>`;
+
+/**
+ * Quoth section template for appending to existing AI config files
+ * ~20 lines, minimal but complete integration instructions
+ */
+export const QUOTH_SECTION_TEMPLATE = `## Quoth Knowledge Base
+
+This project uses **Quoth** as the single source of truth for documentation.
+
+**MCP Server:** \`{QUOTH_URL}\`
+
+### Documented Areas
+{AREAS_LIST}
+
+### Workflow
+1. **BEFORE changes**: \`quoth_search_index\` to find existing patterns
+2. **AFTER new features**: \`quoth_propose_update\` to document them
+
+### Tools
+- \`quoth_search_index\` - Semantic search across documentation
+- \`quoth_read_doc\` - Read full document content
+- \`quoth_propose_update\` - Submit documentation updates`;
+
+/**
+ * Full QUOTH_DOCS.md template for projects without AI config files
+ * Created as fallback when no CLAUDE.md, .cursorrules, etc. are found
+ */
+export const QUOTH_DOCS_TEMPLATE = `# Quoth Documentation
+
+> AI-driven documentation for this project
+
+**MCP Server:** \`{QUOTH_URL}\`
+
+## Documented Areas
+{AREAS_LIST}
+
+## Workflow
+1. **BEFORE changes**: \`quoth_search_index\` to find existing patterns
+2. **AFTER new features**: \`quoth_propose_update\` to document them
+
+## Available Tools
+| Tool | Purpose |
+|------|---------|
+| \`quoth_search_index\` | Semantic search across documentation |
+| \`quoth_read_doc\` | Read full document content |
+| \`quoth_propose_update\` | Submit documentation updates |
+| \`quoth_list_templates\` | List available document templates |
+| \`quoth_get_template\` | Get template structure for new docs |
+
+---
+*Genesis Depth: {DEPTH_LEVEL} | Docs: {DOC_COUNT} | Date: {CURRENT_DATE}*`;

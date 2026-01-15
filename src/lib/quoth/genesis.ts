@@ -50,6 +50,101 @@ const UPLOAD_PROTOCOL = `<upload_protocol>
   DO NOT batch. Upload one at a time.
 </upload_protocol>`;
 
+/**
+ * Onboarding phase - configures AI tools to use Quoth after Genesis completes
+ * Detects existing AI config files and appends Quoth integration instructions
+ */
+const ONBOARDING_PHASE = `<phase name="Onboarding">
+  <purpose>Configure AI tools to use Quoth knowledge base</purpose>
+
+  <detection>
+    Check for existing AI config files in project root (in priority order):
+    1. CLAUDE.md (Claude Code)
+    2. .cursorrules (Cursor)
+    3. .cursor/rules/*.mdc (Cursor rules directory)
+    4. .github/copilot-instructions.md (GitHub Copilot)
+    5. .windsurfrules (Windsurf)
+    6. AGENTS.md (Cross-platform)
+    7. .junie/guidelines.md (JetBrains Junie)
+
+    Report each file found: "[tool]: [path]"
+  </detection>
+
+  <action_if_found>
+    1. Read the first detected config file
+    2. Check if "## Quoth Knowledge Base" section already exists
+    3. If exists: skip with message "Already configured: [path]"
+    4. If not exists:
+       a. Append two blank lines
+       b. Append the QUOTH_SECTION below
+       c. Write updated file locally (NOT quoth_propose_update)
+    5. Report: "Updated: [path] with Quoth configuration"
+  </action_if_found>
+
+  <action_if_not_found>
+    1. Create QUOTH_DOCS.md in project root
+    2. Use the QUOTH_DOCS template below
+    3. Write file locally
+    4. Report: "Created: QUOTH_DOCS.md (universal AI config)"
+  </action_if_not_found>
+
+  <quoth_section_template>
+## Quoth Knowledge Base
+
+This project uses **Quoth** as the single source of truth for documentation.
+
+**MCP Server:** \\\`{QUOTH_URL}\\\`
+
+### Documented Areas
+{AREAS_LIST}
+
+### Workflow
+1. **BEFORE changes**: \\\`quoth_search_index\\\` to find existing patterns
+2. **AFTER new features**: \\\`quoth_propose_update\\\` to document them
+
+### Tools
+- \\\`quoth_search_index\\\` - Semantic search across documentation
+- \\\`quoth_read_doc\\\` - Read full document content
+- \\\`quoth_propose_update\\\` - Submit documentation updates
+  </quoth_section_template>
+
+  <quoth_docs_template>
+# Quoth Documentation
+
+> AI-driven documentation for this project
+
+**MCP Server:** \\\`{QUOTH_URL}\\\`
+
+## Documented Areas
+{AREAS_LIST}
+
+## Workflow
+1. **BEFORE changes**: \\\`quoth_search_index\\\` to find existing patterns
+2. **AFTER new features**: \\\`quoth_propose_update\\\` to document them
+
+## Available Tools
+| Tool | Purpose |
+|------|---------|
+| \\\`quoth_search_index\\\` | Semantic search across documentation |
+| \\\`quoth_read_doc\\\` | Read full document content |
+| \\\`quoth_propose_update\\\` | Submit documentation updates |
+| \\\`quoth_list_templates\\\` | List available document templates |
+| \\\`quoth_get_template\\\` | Get template structure for new docs |
+
+---
+*Genesis Depth: {DEPTH_LEVEL} | Docs: {DOC_COUNT} | Date: {CURRENT_DATE}*
+  </quoth_docs_template>
+
+  <variables>
+    Replace in templates:
+    - {QUOTH_URL} = MCP server URL (use project's Quoth endpoint)
+    - {AREAS_LIST} = Bullet list of documents created in previous phases
+    - {DEPTH_LEVEL} = Genesis depth used (minimal/standard/comprehensive)
+    - {DOC_COUNT} = Number of documents created
+    - {CURRENT_DATE} = Today's date (YYYY-MM-DD)
+  </variables>
+</phase>`;
+
 // ============================================
 // MINIMAL DEPTH PROMPT (~1.2KB)
 // 3 documents: project-overview, tech-stack, repo-structure
@@ -183,8 +278,10 @@ const GENESIS_MINIMAL_PROMPT = `<genesis_protocol version="3.0" depth="minimal">
       </doc>
     </phase>
 
+  ${ONBOARDING_PHASE}
+
     <phase name="Complete">
-      Report: "Genesis complete. 3 documents created and uploaded."
+      Report: "Genesis complete. 3 documents created. AI tools configured."
     </phase>
   </workflow>
 </genesis_protocol>`;
@@ -311,8 +408,10 @@ const GENESIS_STANDARD_PROMPT = `<genesis_protocol version="3.0" depth="standard
       </doc>
     </phase>
 
+  ${ONBOARDING_PHASE}
+
     <phase name="Complete">
-      Report: "Genesis complete. 5 documents created and uploaded."
+      Report: "Genesis complete. 5 documents created. AI tools configured."
     </phase>
   </workflow>
 </genesis_protocol>`;
@@ -460,8 +559,10 @@ const GENESIS_COMPREHENSIVE_PROMPT = `<genesis_protocol version="3.0" depth="com
       </doc>
     </phase>
 
+  ${ONBOARDING_PHASE}
+
     <phase name="Complete">
-      Report: "Genesis complete. 11 documents created and uploaded."
+      Report: "Genesis complete. 11 documents created. AI tools configured."
     </phase>
   </workflow>
 </genesis_protocol>`;
