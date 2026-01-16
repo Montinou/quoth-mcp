@@ -59,6 +59,11 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
+  // Redirect authenticated users from landing page to dashboard
+  if (request.nextUrl.pathname === '/' && user) {
+    return NextResponse.redirect(new URL('/dashboard', request.url))
+  }
+
   // Redirect authenticated users away from auth pages (except specific pages)
   const authExceptions = [
     '/auth/mcp-login',

@@ -1,73 +1,16 @@
 /* =============================================================================
    QUOTH LANDING PAGE - APPROVED DESIGN
    Using shared Quoth components
+
+   Note: Middleware handles redirects for authenticated users to /dashboard
    ============================================================================= */
 "use client";
 
-import { useEffect } from "react";
-import { useRouter } from "next/navigation";
 import { Database, ShieldAlert, History } from "lucide-react";
 import Link from "next/link";
 import { Navbar, Footer, GlassCard } from "@/components/quoth";
 import { Button } from "@/components/ui/button";
-import { useAuth } from "@/contexts/AuthContext";
-import {
-  CodeBlock,
-  CodeLine,
-  CodeKeyword,
-  CodeSuggestion,
-} from "@/components/quoth/CodeBlock";
-
-const CodeDemo = () => {
-  return (
-    <CodeBlock
-      filename="UserService.test.ts"
-      status="auditing"
-      className="max-w-2xl mx-auto mt-16"
-    >
-      <div className="mb-4 text-gray-500">
-        // <span className="text-violet-spectral">Quoth Analysis:</span> 1
-        Violation Detected
-      </div>
-
-      <div>
-        <CodeKeyword>import</CodeKeyword> {"{"} describe, it, expect {"}"}{" "}
-        <CodeKeyword>from</CodeKeyword>{" "}
-        <CodeKeyword type="string">'vitest'</CodeKeyword>;
-      </div>
-      <div>
-        <CodeKeyword>import</CodeKeyword> {"{"} UserService {"}"}{" "}
-        <CodeKeyword>from</CodeKeyword>{" "}
-        <CodeKeyword type="string">'./UserService'</CodeKeyword>;
-      </div>
-      <br />
-
-      <div className="opacity-50">
-        describe(<CodeKeyword type="string">'UserService'</CodeKeyword>, () ={">"}{" "}
-        {"{"}
-      </div>
-      <CodeLine indent={1} className="opacity-50">
-        it(<CodeKeyword type="string">'should fetch user'</CodeKeyword>,{" "}
-        <CodeKeyword>async</CodeKeyword> () ={">"} {"{"}
-      </CodeLine>
-
-      <CodeLine indent={2} highlight>
-        <CodeKeyword>const</CodeKeyword> mock = jest.fn();{" "}
-        <span className="text-xs uppercase tracking-widest text-violet-ghost ml-4 font-sans border border-violet-spectral/50 px-2 py-0.5 rounded bg-violet-spectral/20">
-          Violation
-        </span>
-      </CodeLine>
-
-      <CodeLine indent={2} className="opacity-50">
-        ...
-      </CodeLine>
-
-      <CodeSuggestion source="According to 'patterns/backend-unit-vitest.md', Jest globals are forbidden. Use Vitest native utilities.">
-        <CodeKeyword>const</CodeKeyword> mock = vi.fn();
-      </CodeSuggestion>
-    </CodeBlock>
-  );
-};
+import { CodeDemo } from "@/components/quoth/CodeDemo";
 
 const Hero = () => (
   <section className="relative pt-32 pb-20 px-6 overflow-hidden">
@@ -160,20 +103,6 @@ const Features = () => (
 );
 
 export default function Home() {
-  const { user, loading } = useAuth();
-  const router = useRouter();
-
-  useEffect(() => {
-    if (!loading && user) {
-      router.replace("/dashboard");
-    }
-  }, [user, loading, router]);
-
-  // Show nothing while checking auth to avoid flash
-  if (loading || user) {
-    return null;
-  }
-
   return (
     <div className="min-h-screen animate-page-fade-in">
       <Navbar />

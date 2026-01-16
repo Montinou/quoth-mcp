@@ -121,7 +121,7 @@ interface CodeSuggestionProps {
 }
 
 export function CodeSuggestion({
-  title = "QUOTH SUGGESTION",
+  title = "Quoth Suggestion",
   children,
   source,
 }: CodeSuggestionProps) {

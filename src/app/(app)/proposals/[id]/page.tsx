@@ -5,8 +5,9 @@
  * Shows proposal details with diff viewer and approve/reject actions
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, use } from 'react';
 import { useRouter } from 'next/navigation';
+import { ArrowLeft } from 'lucide-react';
 
 interface Proposal {
   id: string;
@@ -22,7 +23,8 @@ interface Proposal {
   reviewed_by?: string;
 }
 
-export default function ProposalDetailPage({ params }: { params: { id: string } }) {
+export default function ProposalDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = use(params);
   const router = useRouter();
   const [proposal, setProposal] = useState<Proposal | null>(null);
   const [loading, setLoading] = useState(true);
@@ -35,11 +37,11 @@ export default function ProposalDetailPage({ params }: { params: { id: string } 
 
   useEffect(() => {
     fetchProposal();
-  }, []);
+  }, [id]);
 
   async function fetchProposal() {
     try {
-      const res = await fetch(`/api/proposals/${params.id}`);
+      const res = await fetch(`/api/proposals/${id}`);
       if (!res.ok) throw new Error('Failed to fetch proposal');
 
       const data = await res.json();
@@ -62,7 +64,7 @@ export default function ProposalDetailPage({ params }: { params: { id: string } 
     setError(null);
 
     try {
-      const res = await fetch(`/api/proposals/${params.id}/approve`, {
+      const res = await fetch(`/api/proposals/${id}/approve`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ reviewerEmail })
@@ -99,7 +101,7 @@ export default function ProposalDetailPage({ params }: { params: { id: string } 
     setError(null);
 
     try {
-      const res = await fetch(`/api/proposals/${params.id}/reject`, {
+      const res = await fetch(`/api/proposals/${id}/reject`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ reviewerEmail, reason: rejectReason })
@@ -123,15 +125,15 @@ export default function ProposalDetailPage({ params }: { params: { id: string } 
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-obsidian text-white p-8 flex items-center justify-center">
-        <div className="text-graphite">Loading proposal...</div>
+      <div className="px-6 py-8 md:pt-8 flex items-center justify-center min-h-[50vh]">
+        <div className="text-gray-400">Loading proposal...</div>
       </div>
     );
   }
 
   if (error && !proposal) {
     return (
-      <div className="min-h-screen bg-obsidian text-white p-8">
+      <div className="px-6 py-8 md:pt-8">
         <div className="max-w-4xl mx-auto">
           <div className="glass-panel p-8 text-center">
             <p className="text-red-400 mb-4">{error}</p>
@@ -149,10 +151,10 @@ export default function ProposalDetailPage({ params }: { params: { id: string } 
 
   if (!proposal) {
     return (
-      <div className="min-h-screen bg-obsidian text-white p-8">
+      <div className="px-6 py-8 md:pt-8">
         <div className="max-w-4xl mx-auto">
           <div className="glass-panel p-8 text-center">
-            <p className="text-graphite mb-4">Proposal not found</p>
+            <p className="text-gray-400 mb-4">Proposal not found</p>
             <button
               onClick={() => router.push('/proposals')}
               className="text-violet-glow hover:text-violet-spectral"
@@ -174,13 +176,14 @@ export default function ProposalDetailPage({ params }: { params: { id: string } 
   };
 
   return (
-    <div className="min-h-screen bg-obsidian text-graphite p-8">
+    <div className="px-6 py-8 md:pt-8">
       <div className="max-w-7xl mx-auto">
         <button
           onClick={() => router.back()}
-          className="text-violet-glow hover:text-violet-spectral mb-6 inline-flex items-center"
+          className="text-violet-glow hover:text-violet-spectral mb-6 inline-flex items-center gap-2"
         >
-          ← Back to Proposals
+          <ArrowLeft size={18} />
+          Back to Proposals
         </button>
 
         {error && (
@@ -194,11 +197,11 @@ export default function ProposalDetailPage({ params }: { params: { id: string } 
           <div className="flex justify-between items-start mb-6">
             <div>
               <h1 className="text-3xl font-bold text-white mb-2">{proposal.file_path}</h1>
-              <p className="text-sm text-graphite">
+              <p className="text-sm text-gray-400">
                 Created {new Date(proposal.created_at).toLocaleString()}
               </p>
               {proposal.reviewed_by && (
-                <p className="text-sm text-graphite">
+                <p className="text-sm text-gray-400">
                   Reviewed by {proposal.reviewed_by}
                 </p>
               )}
@@ -211,14 +214,14 @@ export default function ProposalDetailPage({ params }: { params: { id: string } 
           {/* Reasoning */}
           <div className="mb-6">
             <h2 className="text-xl font-semibold text-white mb-2">Reasoning</h2>
-            <p className="text-graphite">{proposal.reasoning}</p>
+            <p className="text-gray-400">{proposal.reasoning}</p>
           </div>
 
           {/* Evidence */}
           {proposal.evidence_snippet && (
             <div className="mb-6">
               <h2 className="text-xl font-semibold text-white mb-2">Evidence</h2>
-              <pre className="bg-charcoal p-4 rounded-lg overflow-x-auto text-sm text-graphite">
+              <pre className="bg-charcoal p-4 rounded-lg overflow-x-auto text-sm text-gray-400">
                 {proposal.evidence_snippet}
               </pre>
             </div>
@@ -230,13 +233,13 @@ export default function ProposalDetailPage({ params }: { params: { id: string } 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               <div>
                 <h3 className="text-sm text-red-400 mb-2 font-semibold">Original</h3>
-                <pre className="bg-charcoal p-4 rounded-lg overflow-auto max-h-96 text-xs text-graphite whitespace-pre-wrap">
+                <pre className="bg-charcoal p-4 rounded-lg overflow-auto max-h-96 text-xs text-gray-400 whitespace-pre-wrap">
                   {proposal.original_content}
                 </pre>
               </div>
               <div>
                 <h3 className="text-sm text-green-400 mb-2 font-semibold">Proposed</h3>
-                <pre className="bg-charcoal p-4 rounded-lg overflow-auto max-h-96 text-xs text-graphite whitespace-pre-wrap">
+                <pre className="bg-charcoal p-4 rounded-lg overflow-auto max-h-96 text-xs text-gray-400 whitespace-pre-wrap">
                   {proposal.proposed_content}
                 </pre>
               </div>
@@ -272,14 +275,14 @@ export default function ProposalDetailPage({ params }: { params: { id: string } 
           {proposal.status === 'rejected' && proposal.rejection_reason && (
             <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-4">
               <h3 className="text-red-400 font-semibold mb-2">Rejection Reason</h3>
-              <p className="text-graphite">{proposal.rejection_reason}</p>
+              <p className="text-gray-400">{proposal.rejection_reason}</p>
             </div>
           )}
 
           {proposal.status === 'error' && proposal.rejection_reason && (
             <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-4">
               <h3 className="text-red-400 font-semibold mb-2">Error</h3>
-              <p className="text-graphite">{proposal.rejection_reason}</p>
+              <p className="text-gray-400">{proposal.rejection_reason}</p>
             </div>
           )}
         </div>
@@ -289,7 +292,7 @@ export default function ProposalDetailPage({ params }: { params: { id: string } 
           <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
             <div className="glass-panel p-8 max-w-md w-full">
               <h2 className="text-2xl font-bold text-white mb-4">Approve Proposal</h2>
-              <p className="text-graphite mb-4">
+              <p className="text-gray-400 mb-4">
                 This will apply the changes to the knowledge base. Enter your email to confirm:
               </p>
               <input

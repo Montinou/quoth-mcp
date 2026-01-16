@@ -40,7 +40,7 @@ export function QuothEmailLayout({ preview, children }: QuothEmailLayoutProps) {
       <Head>
         <style>
           {`
-            @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&display=swap');
+            @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500;1,600;1,700&display=swap');
           `}
         </style>
       </Head>
@@ -49,7 +49,7 @@ export function QuothEmailLayout({ preview, children }: QuothEmailLayoutProps) {
         <Container style={container}>
           {/* Header */}
           <Section style={header}>
-            <Text style={logo}>QUOTH</Text>
+            <Text style={logo}>Quoth</Text>
             <Text style={tagline}>Single Source of Truth</Text>
           </Section>
 
@@ -132,12 +132,13 @@ const header: React.CSSProperties = {
 };
 
 const logo: React.CSSProperties = {
-  fontFamily: 'Cinzel, Georgia, serif',
-  fontSize: '32px',
-  fontWeight: 700,
+  fontFamily: '"Cormorant Garamond", Georgia, serif',
+  fontSize: '36px',
+  fontWeight: 500,
+  fontStyle: 'italic',
   color: colors.violetSpectral,
   margin: '0',
-  letterSpacing: '4px',
+  letterSpacing: '2px',
 };
 
 const tagline: React.CSSProperties = {

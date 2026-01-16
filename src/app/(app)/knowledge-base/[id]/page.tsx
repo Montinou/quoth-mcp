@@ -83,15 +83,15 @@ export default function DocumentDetailPage({ params }: { params: Promise<{ id: s
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-obsidian text-graphite flex items-center justify-center">
-        <div>Loading document...</div>
+      <div className="px-6 py-8 md:pt-8 flex items-center justify-center min-h-[50vh]">
+        <div className="text-gray-400">Loading document...</div>
       </div>
     );
   }
 
   if (error || !doc) {
     return (
-      <div className="min-h-screen bg-obsidian text-white p-8">
+      <div className="px-6 py-8 md:pt-8">
         <div className="max-w-4xl mx-auto">
           <div className="glass-panel p-8 text-center">
             <p className="text-red-400 mb-4">{error || 'Document not found'}</p>
@@ -107,15 +107,15 @@ export default function DocumentDetailPage({ params }: { params: Promise<{ id: s
     );
   }
 
-  const displayContent = viewingVersion 
+  const displayContent = viewingVersion
     ? doc.history.find(h => h.version === viewingVersion)?.content || doc.content
     : doc.content;
 
   return (
-    <div className="min-h-screen bg-obsidian text-graphite">
-      <div className="container mx-auto px-4 py-8 max-w-4xl">
-        <button 
-          onClick={() => router.back()} 
+    <div className="px-6 py-8 md:pt-8">
+      <div className="max-w-4xl mx-auto">
+        <button
+          onClick={() => router.back()}
           className="flex items-center gap-2 mb-6 text-violet-glow hover:text-violet-spectral transition-colors"
         >
           <ArrowLeft size={18} /> Back
@@ -124,7 +124,7 @@ export default function DocumentDetailPage({ params }: { params: Promise<{ id: s
         <div className="flex justify-between items-start mb-6">
           <div>
             <h1 className="text-3xl font-bold text-white">{doc.title}</h1>
-            <p className="text-graphite">{doc.path}</p>
+            <p className="text-gray-400">{doc.path}</p>
           </div>
           <span className="px-3 py-1 rounded-full bg-violet-spectral/20 text-violet-glow h-fit">
             Version {viewingVersion || doc.version}

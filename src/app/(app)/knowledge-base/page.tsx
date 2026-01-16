@@ -63,7 +63,7 @@ export default function KnowledgeBasePage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ query: q }),
-        signal: controller.signal, // ✅ Pass abort signal
+        signal: controller.signal,
       });
 
       // Check if aborted
@@ -108,8 +108,8 @@ export default function KnowledgeBasePage() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-obsidian text-gray-400">
-      <div className="container mx-auto px-4 py-8 max-w-6xl">
+    <div className="px-6 py-8 md:pt-8">
+      <div className="max-w-6xl mx-auto">
         <h1 className="text-3xl font-bold text-white mb-2">Knowledge Base</h1>
         <p className="text-gray-400 mb-8">
           Ask questions about your documentation - powered by AI

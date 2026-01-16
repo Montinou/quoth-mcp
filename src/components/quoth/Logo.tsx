@@ -52,12 +52,12 @@ export function Logo({ className, showText = true, size = "md" }: LogoProps) {
       {showText && (
         <span
           className={cn(
-            "font-serif font-bold tracking-wider text-white",
+            "font-medium italic tracking-wide text-white",
             text
           )}
-          style={{ fontFamily: "var(--font-cinzel), serif" }}
+          style={{ fontFamily: "var(--font-cormorant), serif" }}
         >
-          QUOTH
+          Quoth
         </span>
       )}
     </div>
