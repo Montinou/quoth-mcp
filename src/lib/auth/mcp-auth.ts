@@ -9,6 +9,15 @@ import { createClient } from '@supabase/supabase-js';
 import type { NextRequest } from 'next/server';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
+// Debug flag - only enable with explicit env var
+const DEBUG_MCP_AUTH = process.env.NODE_ENV === 'development' && process.env.DEBUG_MCP_AUTH === 'true';
+
+function debugLog(...args: unknown[]) {
+  if (DEBUG_MCP_AUTH) {
+    console.log(...args);
+  }
+}
+
 /**
  * Authentication context passed to MCP tools
  * Contains user and project information extracted from JWT
@@ -31,7 +40,7 @@ async function verifySupabaseToken(token: string): Promise<AuthContext | null> {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-  console.log('[MCP Auth] Verifying Supabase token...');
+  debugLog('[MCP Auth] Verifying Supabase token...');
 
   if (!supabaseUrl || !supabaseServiceKey) {
     console.error('[MCP Auth] Supabase configuration missing');
@@ -47,13 +56,13 @@ async function verifySupabaseToken(token: string): Promise<AuthContext | null> {
     });
 
     // Verify token with Supabase (this validates the token is legitimate)
-    console.log('[MCP Auth] Calling supabase.auth.getUser...');
+    debugLog('[MCP Auth] Calling supabase.auth.getUser...');
     const {
       data: { user },
       error,
     } = await supabase.auth.getUser(token);
 
-    console.log('[MCP Auth] getUser result:', { user: user?.id, error: error?.message });
+    debugLog('[MCP Auth] getUser result:', { user: user?.id, error: error?.message });
 
     if (error || !user) {
       console.error('[MCP Auth] Token verification failed:', error?.message || 'No user');
@@ -66,14 +75,14 @@ async function verifySupabaseToken(token: string): Promise<AuthContext | null> {
     const decoded = decodeJwt(token);
     const jwtAppMetadata = decoded.app_metadata as Record<string, unknown> | undefined;
 
-    console.log('[MCP Auth] JWT app_metadata (from hook):', JSON.stringify(jwtAppMetadata, null, 2));
-    console.log('[MCP Auth] User record app_metadata (from DB):', JSON.stringify(user.app_metadata, null, 2));
+    debugLog('[MCP Auth] JWT app_metadata (from hook):', JSON.stringify(jwtAppMetadata, null, 2));
+    debugLog('[MCP Auth] User record app_metadata (from DB):', JSON.stringify(user.app_metadata, null, 2));
 
     // Extract claims from JWT (injected by Custom Access Token Hook)
     const projectId = jwtAppMetadata?.project_id as string | undefined;
     const role = jwtAppMetadata?.mcp_role as string | undefined;
 
-    console.log('[MCP Auth] Extracted JWT claims:', { projectId, role });
+    debugLog('[MCP Auth] Extracted JWT claims:', { projectId, role });
 
     if (!projectId) {
       console.warn('[MCP Auth] JWT missing project_id in app_metadata');

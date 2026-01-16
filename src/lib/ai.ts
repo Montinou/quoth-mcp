@@ -64,9 +64,14 @@ export async function generateJinaEmbedding(text: string): Promise<number[]> {
  * Generate embedding for search query using Jina
  */
 export async function generateQueryEmbedding(query: string): Promise<number[]> {
-   if (!jinaApiKey) {
+  console.log('[EMBEDDING] Generating query embedding for:', query.slice(0, 100));
+
+  if (!jinaApiKey) {
+    console.error('[EMBEDDING] Jina API key not configured');
     throw new Error("Jina API not configured. Set JINA_API_KEY");
   }
+
+  console.log('[EMBEDDING] Calling Jina API (model: jina-embeddings-v3, task: retrieval.query, dims: 512)');
 
   const response = await fetch('https://api.jina.ai/v1/embeddings', {
     method: 'POST',
@@ -84,11 +89,14 @@ export async function generateQueryEmbedding(query: string): Promise<number[]> {
 
   if (!response.ok) {
     const errorText = await response.text();
+    console.error('[EMBEDDING] Jina API Error:', response.status, errorText);
     throw new Error(`Jina API Error: ${response.status} - ${errorText}`);
   }
 
   const data = await response.json();
-  return data.data[0].embedding;
+  const embedding = data.data[0].embedding;
+  console.log('[EMBEDDING] Successfully generated:', embedding ? `${embedding.length} dimensions` : 'FAILED');
+  return embedding;
 }
 
 /**

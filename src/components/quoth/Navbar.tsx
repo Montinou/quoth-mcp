@@ -38,7 +38,8 @@ export function Navbar({
   const hydrated = useHydrated();
 
   // Show loading state during SSR, hydration, and initial auth check
-  const isLoading = !hydrated || loading;
+  // But if we have a cached profile, show it immediately (profile persists in localStorage)
+  const isLoading = !hydrated || (loading && !profile);
 
   const handleSignOut = async () => {
     setDropdownOpen(false);

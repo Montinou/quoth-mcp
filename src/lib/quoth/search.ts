@@ -32,6 +32,8 @@ export async function searchDocuments(
   query: string,
   projectId: string
 ): Promise<DocumentReference[]> {
+  console.log('[SEARCH] Starting search - Query:', query.slice(0, 100), 'ProjectID:', projectId);
+
   // Validate configuration
   if (!isSupabaseConfigured()) {
     throw new Error('Supabase not configured.');
@@ -41,17 +43,23 @@ export async function searchDocuments(
   // Logic in ai.ts handles generating the right dimension (512 for Jina)
   // Note: search_query task_type is handled inside generateQueryEmbedding if using Jina
   const queryEmbedding = await import('../ai').then(m => m.generateQueryEmbedding ? m.generateQueryEmbedding(query) : m.generateEmbedding(query));
+  console.log('[SEARCH] Embedding generated:', queryEmbedding ? `${queryEmbedding.length} dimensions` : 'FAILED');
 
   // 1. Initial Retrieval (Vector Search)
   const { data: candidates, error } = await supabase.rpc('match_documents', {
-    query_embedding: queryEmbedding, 
+    query_embedding: queryEmbedding,
     match_threshold: 0.1, // Low threshold to get maximum recall for reranker
     match_count: SEARCH_CONFIG.initialFetchCount,
     filter_project_id: projectId,
   });
 
+  console.log('[SEARCH] RPC match_documents returned:', candidates?.length || 0, 'candidates', error ? `Error: ${error.message}` : '');
+
   if (error) throw new Error(`Search failed: ${error.message}`);
-  if (!candidates || candidates.length === 0) return [];
+  if (!candidates || candidates.length === 0) {
+    console.warn('[SEARCH] No candidates found - returning empty results');
+    return [];
+  }
 
   // If Cohere is not configured, return vector results directly (fallback)
   if (!cohere) {
@@ -68,6 +76,8 @@ export async function searchDocuments(
     // Pass metadata to preserve context if needed
   }));
 
+  console.log('[SEARCH] Reranking', candidates.length, 'candidates with Cohere (model: rerank-english-v3.0)');
+
   try {
     const rerankResponse = await cohere.rerank({
       model: "rerank-english-v3.0",
@@ -76,11 +86,16 @@ export async function searchDocuments(
       topN: SEARCH_CONFIG.maxMatchCount, // Fetch up to max, then filter dynamically
     });
 
+    console.log('[SEARCH] Cohere rerank returned', rerankResponse.results.length, 'results');
+
     // 3. Transform and Filter with dynamic cutoff
     const rerankedResults: DocumentReference[] = [];
 
     for (const result of rerankResponse.results) {
-      if (result.relevanceScore < SEARCH_CONFIG.minRerankScore) continue;
+      if (result.relevanceScore < SEARCH_CONFIG.minRerankScore) {
+        console.log('[SEARCH] Filtering out result with score', result.relevanceScore, '(below min:', SEARCH_CONFIG.minRerankScore, ')');
+        continue;
+      }
 
       const originalDoc = candidates[result.index];
       rerankedResults.push(transformMatchToDocRef(originalDoc, result.relevanceScore));
@@ -88,10 +103,12 @@ export async function searchDocuments(
       // Dynamic cutoff: stop after minMatchCount if relevance drops below threshold
       if (rerankedResults.length >= SEARCH_CONFIG.minMatchCount &&
           result.relevanceScore < SEARCH_CONFIG.highRelevanceThreshold) {
+        console.log('[SEARCH] Dynamic cutoff reached at', rerankedResults.length, 'results (score:', result.relevanceScore, ')');
         break;
       }
     }
 
+    console.log('[SEARCH] Returning', rerankedResults.length, 'reranked results');
     return rerankedResults;
 
   } catch (err) {

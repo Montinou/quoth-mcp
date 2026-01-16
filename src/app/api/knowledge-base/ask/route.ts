@@ -42,11 +42,19 @@ export async function POST(request: Request) {
       return Response.json({ error: 'Query is required' }, { status: 400 });
     }
 
+    console.log('[ASK API] Processing query:', query, 'for user:', user.id, 'project:', membership.project_id);
+
     // 1. Vector search to get relevant documents
     const searchResults = await searchDocuments(query, membership.project_id);
+    console.log('[ASK API] Search returned', searchResults.length, 'results');
+
+    if (searchResults.length === 0) {
+      console.warn('[ASK API] No search results found - this will trigger "No relevant documentation found" message');
+    }
 
     // 2. Check if generative AI is configured
     if (!isGenerativeAIConfigured()) {
+      console.log('[ASK API] Gemini not configured - returning search results only');
       // Return search results only without AI answer
       return Response.json({
         aiAnswer: null,
@@ -59,6 +67,7 @@ export async function POST(request: Request) {
 
     // 3. Fetch full content for top results to build context
     const topResults = searchResults.slice(0, 5);
+    console.log('[ASK API] Fetching full content for top', topResults.length, 'results');
     const contexts: RAGContext[] = [];
 
     for (const result of topResults) {
@@ -86,7 +95,9 @@ export async function POST(request: Request) {
     }
 
     // 4. Generate AI answer using Gemini 2.0 Flash
+    console.log('[ASK API] Generating RAG answer with', contexts.length, 'contexts');
     const ragAnswer = await generateRAGAnswer(query, contexts);
+    console.log('[ASK API] RAG answer generated successfully');
 
     return Response.json({
       aiAnswer: ragAnswer.answer,

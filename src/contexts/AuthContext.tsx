@@ -13,6 +13,50 @@ import { createContext, useContext, useEffect, useState, useRef, useCallback } f
 import { createClient } from '@/lib/supabase/client';
 import type { User, Session } from '@supabase/supabase-js';
 
+// Debug flag - set to false in production
+const DEBUG_AUTH = process.env.NODE_ENV === 'development';
+
+function debugLog(...args: unknown[]) {
+  if (DEBUG_AUTH) {
+    console.log(...args);
+  }
+}
+
+// LocalStorage key for caching profile
+const PROFILE_CACHE_KEY = 'quoth_profile_cache';
+
+// Helper to read cached profile from localStorage
+function getCachedProfile(): Profile | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const cached = localStorage.getItem(PROFILE_CACHE_KEY);
+    if (cached) {
+      const parsed = JSON.parse(cached);
+      // Validate basic structure
+      if (parsed && parsed.id && parsed.email) {
+        return parsed as Profile;
+      }
+    }
+  } catch {
+    // Ignore parse errors
+  }
+  return null;
+}
+
+// Helper to cache profile to localStorage
+function setCachedProfile(profile: Profile | null) {
+  if (typeof window === 'undefined') return;
+  try {
+    if (profile) {
+      localStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify(profile));
+    } else {
+      localStorage.removeItem(PROFILE_CACHE_KEY);
+    }
+  } catch {
+    // Ignore storage errors
+  }
+}
+
 interface Profile {
   id: string;
   email: string;
@@ -38,15 +82,27 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
+  // Initialize from cache to avoid flicker on navigation
+  const cachedProfile = getCachedProfile();
   const [user, setUser] = useState<User | null>(null);
-  const [profile, setProfile] = useState<Profile | null>(null);
+  const [profile, setProfile] = useState<Profile | null>(cachedProfile);
   const [session, setSession] = useState<Session | null>(null);
-  const [loading, setLoading] = useState(true);
+  // If we have a cached profile, don't show loading state (profile will show instantly)
+  const [loading, setLoading] = useState(!cachedProfile);
   const [profileLoading, setProfileLoading] = useState(false);
   const [profileError, setProfileError] = useState<string | null>(null);
   const [supabase] = useState(() => createClient());
   const abortControllerRef = useRef<AbortController | null>(null);
   const lastVisibilityCheckRef = useRef<number>(0);
+
+  // Refs to access current state without triggering re-renders
+  const userRef = useRef<User | null>(null);
+  // Also initialize profileRef from cache
+  const profileRef = useRef<Profile | null>(getCachedProfile());
+  const profileLoadingRef = useRef(false);
+  const profileErrorRef = useRef<string | null>(null);
+  const profileRetryCountRef = useRef(0);
+  const isRevalidatingRef = useRef(false);
 
   // Re-validate session with server (uses getUser() which validates JWT)
   // This syncs client state with server-side cookie updates from middleware
@@ -58,33 +114,65 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
     lastVisibilityCheckRef.current = now;
 
+    // Deduplicate: if already revalidating, skip
+    if (isRevalidatingRef.current) {
+      debugLog('[AuthContext] Revalidation already in progress, skipping');
+      return;
+    }
+    isRevalidatingRef.current = true;
+
     try {
       const { data: { user: serverUser }, error } = await supabase.auth.getUser();
 
       // Ignore AbortError - it's expected during React StrictMode remounts
       if (error) {
         if (error.message?.includes('AbortError') || error.name === 'AbortError') {
+          isRevalidatingRef.current = false;
           return;
         }
       }
 
-      if (error || !serverUser) {
-        // Server says session is invalid - clear client state
-        if (user) {
-          console.log('[AuthContext] Session invalidated by server, clearing state');
+      if (error) {
+        // Only clear state for definitive auth errors, NOT temporary failures
+        const isDefinitiveAuthError = error.message?.includes('session') ||
+          error.message?.includes('token') ||
+          error.message?.includes('expired') ||
+          error.message?.includes('invalid') ||
+          error.status === 401 ||
+          error.status === 403;
+
+        if (isDefinitiveAuthError && userRef.current) {
+          debugLog('[AuthContext] Definitive session error, clearing state:', error.message);
           setUser(null);
+          userRef.current = null;
           setProfile(null);
+          profileRef.current = null;
+          setCachedProfile(null); // Clear localStorage cache
           setSession(null);
           setProfileLoading(false);
+          profileLoadingRef.current = false;
           setProfileError(null);
+          profileErrorRef.current = null;
+        } else {
+          debugLog('[AuthContext] Temporary revalidation error, keeping state:', error.message);
         }
+        isRevalidatingRef.current = false;
         return;
       }
 
-      // Session is valid - update if user changed or was null
-      if (!user || user.id !== serverUser.id) {
-        console.log('[AuthContext] Syncing user state from server');
+      if (!serverUser) {
+        // No user returned but no error - might be race condition, don't clear immediately
+        debugLog('[AuthContext] No user returned during revalidation, will retry');
+        isRevalidatingRef.current = false;
+        return;
+      }
+
+      // Session is valid - update if user changed or was null (use ref for comparison)
+      const currentUser = userRef.current;
+      if (!currentUser || currentUser.id !== serverUser.id) {
+        debugLog('[AuthContext] Syncing user state from server');
         setUser(serverUser);
+        userRef.current = serverUser;
         // Fetch fresh session and profile
         const { data: { session: freshSession } } = await supabase.auth.getSession();
         setSession(freshSession);
@@ -94,13 +182,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           abortControllerRef.current = controller;
           await fetchProfile(serverUser.id, controller.signal);
         }
-      } else if (!profile && user && !profileLoading && !profileError) {
-        // User exists but profile is missing - retry fetch
-        console.log('[AuthContext] Profile missing, retrying fetch');
+      } else if (!profileRef.current && currentUser && !profileLoadingRef.current && !profileErrorRef.current) {
+        // Profile missing - retry with exponential backoff
+        const retryCount = profileRetryCountRef.current;
+        const backoffDelay = Math.min(1000 * Math.pow(2, retryCount), 10000); // Max 10s
+
+        debugLog('[AuthContext] Profile missing, retrying fetch (attempt', retryCount + 1, ') after', backoffDelay, 'ms');
+
+        await new Promise(resolve => setTimeout(resolve, backoffDelay));
+
+        profileRetryCountRef.current += 1;
         const controller = new AbortController();
         abortControllerRef.current = controller;
-        await fetchProfile(user.id, controller.signal);
+        await fetchProfile(currentUser.id, controller.signal);
       }
+
+      isRevalidatingRef.current = false;
     } catch (err) {
       // Ignore AbortError - it's expected during React StrictMode unmount/remount
       const isAbortError = err instanceof Error && (
@@ -109,17 +206,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         err.message?.includes('signal')
       );
       if (isAbortError) {
+        isRevalidatingRef.current = false;
         return;
       }
       console.error('[AuthContext] Session revalidation error:', err);
       // On unexpected error, clear state to prevent stuck UI
       // User will need to re-authenticate
       setUser(null);
+      userRef.current = null;
       setProfile(null);
+      profileRef.current = null;
+      setCachedProfile(null); // Clear localStorage cache
       setSession(null);
       setProfileLoading(false);
+      profileLoadingRef.current = false;
+      isRevalidatingRef.current = false;
     }
-  }, [user, profile, profileLoading, profileError, supabase]);
+  }, [supabase]); // ✅ ONLY depends on supabase (stable)
 
   useEffect(() => {
     let mounted = true;
@@ -145,22 +248,49 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         if (!mounted) return;
 
-        if (error || !user) {
-          // Session was invalid/expired and couldn't refresh
-          // Clear stale auth data to prevent stuck state
-          console.log('[AuthContext] Clearing stale session data');
-          try {
-            await supabase.auth.signOut();
-          } catch (signOutErr) {
-            // Ignore signOut errors - session is already invalid
-            console.warn('[AuthContext] signOut failed (session already invalid):', signOutErr);
+        if (error) {
+          // Only sign out for definitive auth errors
+          const isDefinitiveAuthError = error.message?.includes('session') ||
+            error.message?.includes('token') ||
+            error.message?.includes('expired') ||
+            error.message?.includes('invalid') ||
+            error.status === 401 ||
+            error.status === 403;
+
+          if (isDefinitiveAuthError) {
+            debugLog('[AuthContext] Definitive auth error on init, signing out:', error.message);
+            try {
+              await supabase.auth.signOut();
+            } catch (signOutErr) {
+              console.warn('[AuthContext] signOut failed:', signOutErr);
+            }
+          } else {
+            // For temporary errors, try to use local session anyway
+            debugLog('[AuthContext] Temporary auth error on init, using local session:', error.message);
+            // Use the user from local session if available
+            if (localSession?.user) {
+              setUser(localSession.user);
+              userRef.current = localSession.user;
+              setSession(localSession);
+              // Try to fetch profile anyway
+              abortControllerRef.current = new AbortController();
+              await fetchProfile(localSession.user.id, abortControllerRef.current.signal);
+            }
           }
+          setLoading(false);
+          return;
+        }
+
+        if (!user) {
+          // No user and no error - session might be invalid
+          debugLog('[AuthContext] No user returned on init');
           setLoading(false);
           return;
         }
 
         // Valid session - set user and fetch profile
         setUser(user);
+        userRef.current = user;
         setSession(localSession);
 
         // Create abort controller for initial fetch
@@ -204,6 +334,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         setSession(session);
         setUser(session?.user ?? null);
+        userRef.current = session?.user ?? null;
 
         if (session?.user) {
           // Create new abort controller for this fetch
@@ -225,7 +356,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           }
         } else {
           setProfile(null);
+          profileRef.current = null;
+          setCachedProfile(null); // Clear localStorage cache on logout
           setProfileLoading(false);
+          profileLoadingRef.current = false;
         }
       }
     );
@@ -269,7 +403,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   async function fetchProfile(userId: string, abortSignal?: AbortSignal) {
     try {
       setProfileLoading(true);
+      profileLoadingRef.current = true;
       setProfileError(null);
+      profileErrorRef.current = null;
 
       // Check if aborted before fetching
       if (abortSignal?.aborted) return;
@@ -277,14 +413,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Verify session is still valid with SERVER (not local cookies)
       // getUser() validates JWT with Supabase Auth server
       const { data: { user: validatedUser }, error: authError } = await supabase.auth.getUser();
-      if (authError || !validatedUser || validatedUser.id !== userId) {
-        console.log('[AuthContext] Session invalid or changed, aborting profile fetch');
-        // If session is completely invalid, clear state
-        if (authError || !validatedUser) {
+
+      if (authError) {
+        // Only clear state for definitive auth errors, NOT temporary failures
+        // Errors like "session_not_found" or "invalid_token" are definitive
+        const isDefinitiveAuthError = authError.message?.includes('session') ||
+          authError.message?.includes('token') ||
+          authError.message?.includes('expired') ||
+          authError.message?.includes('invalid') ||
+          authError.status === 401 ||
+          authError.status === 403;
+
+        if (isDefinitiveAuthError) {
+          debugLog('[AuthContext] Definitive auth error, clearing state:', authError.message);
           setUser(null);
+          userRef.current = null;
           setSession(null);
           setProfile(null);
+          profileRef.current = null;
+          setCachedProfile(null); // Clear localStorage cache
+        } else {
+          // For temporary errors (network issues, etc), just log and don't clear state
+          // The profile might load on next retry
+          debugLog('[AuthContext] Temporary auth error, keeping state:', authError.message);
         }
+        return;
+      }
+
+      if (!validatedUser || validatedUser.id !== userId) {
+        debugLog('[AuthContext] User mismatch or missing, aborting profile fetch');
         return;
       }
 
@@ -302,11 +459,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (error) {
         console.error('[AuthContext] Profile fetch error:', error);
         setProfileError(error.message);
+        profileErrorRef.current = error.message;
         return;
       }
 
       if (data) {
-        setProfile(data as Profile);
+        const profileData = data as Profile;
+        setProfile(profileData);
+        profileRef.current = profileData;
+        setCachedProfile(profileData); // ✅ Cache to localStorage
+        profileRetryCountRef.current = 0; // ✅ Reset retry count on success
       }
     } catch (err) {
       // Ignore AbortError - it's expected when auth state changes
@@ -319,11 +481,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (isAbortError || abortSignal?.aborted) {
         return;
       }
-      console.error('[AuthContext] Failed to load profile:', err);
+      // For network errors, DON'T clear auth state - just log and let retry handle it
+      console.error('[AuthContext] Failed to load profile (will retry):', err);
       setProfileError('Failed to load profile');
+      profileErrorRef.current = 'Failed to load profile';
     } finally {
       if (!abortSignal?.aborted) {
         setProfileLoading(false);
+        profileLoadingRef.current = false;
       }
     }
   }
@@ -378,9 +543,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
       await supabase.auth.signOut();
       setUser(null);
+      userRef.current = null;
       setProfile(null);
+      profileRef.current = null;
+      setCachedProfile(null); // ✅ Clear localStorage cache
       setSession(null);
       setProfileLoading(false);
+      profileLoadingRef.current = false;
     } catch (error) {
       console.error('Error signing out:', error);
     }

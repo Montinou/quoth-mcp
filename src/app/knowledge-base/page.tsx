@@ -5,7 +5,7 @@
  * Semantic search UI with AI-powered answers using Gemini 2.0 Flash
  */
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { Search, FileText, Clock, Sparkles, ChevronRight, Lightbulb } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
@@ -40,10 +40,20 @@ export default function KnowledgeBasePage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   const handleSearch = async (searchQuery?: string) => {
     const q = searchQuery || query;
     if (!q.trim()) return;
+
+    // Cancel previous request if still in-flight
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+
+    // Create new controller for this request
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
 
     setLoading(true);
     setError(null);
@@ -53,8 +63,14 @@ export default function KnowledgeBasePage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ query: q }),
+        signal: controller.signal, // ✅ Pass abort signal
       });
+
+      // Check if aborted
+      if (controller.signal.aborted) return;
+
       const data = await res.json();
+      if (controller.signal.aborted) return;
 
       if (!res.ok) {
         setError(data.error || 'Search failed');
@@ -63,10 +79,17 @@ export default function KnowledgeBasePage() {
 
       setResponse(data);
     } catch (err) {
+      // Ignore AbortError - expected when user triggers new search
+      if (err instanceof Error && err.name === 'AbortError') {
+        return;
+      }
       console.error('Search failed:', err);
       setError('Search failed');
     } finally {
-      setLoading(false);
+      // Only clear loading if not aborted
+      if (!controller.signal.aborted) {
+        setLoading(false);
+      }
     }
   };
 
@@ -74,6 +97,15 @@ export default function KnowledgeBasePage() {
     setQuery(question);
     handleSearch(question);
   };
+
+  // Cleanup: abort in-flight request on unmount
+  useEffect(() => {
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
+  }, []);
 
   return (
     <div className="min-h-screen bg-obsidian text-gray-400">
