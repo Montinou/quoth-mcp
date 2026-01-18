@@ -20,8 +20,10 @@ import { createMcpHandler, withMcpAuth } from 'mcp-handler';
 import { registerQuothTools } from '@/lib/quoth/tools';
 import { getArchitectPrompt, getAuditorPrompt, getDocumenterPrompt } from '@/lib/quoth/prompts';
 import { verifyMcpApiKey, type AuthContext } from '@/lib/auth/mcp-auth';
+import { sessionManager } from '@/lib/auth/session-manager';
 import type { AuthInfo } from '@modelcontextprotocol/sdk/server/auth/types.js';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { randomUUID } from 'crypto';
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://quoth.ai-innovation.site';
 
@@ -36,6 +38,9 @@ async function verifyToken(req: Request, bearerToken?: string): Promise<AuthInfo
   // verifyMcpApiKey now handles both MCP API keys and OAuth tokens
   const mcpAuth = await verifyMcpApiKey(bearerToken);
   if (mcpAuth) {
+    // Generate unique connection ID (or extract from request headers if available)
+    const connectionId = req.headers.get('x-mcp-connection-id') || randomUUID();
+    
     return {
       token: bearerToken,
       clientId: mcpAuth.user_id,
@@ -46,6 +51,8 @@ async function verifyToken(req: Request, bearerToken?: string): Promise<AuthInfo
         project_id: mcpAuth.project_id,
         user_id: mcpAuth.user_id,
         role: mcpAuth.role,
+        connection_id: connectionId,
+        available_projects: mcpAuth.available_projects,
       },
     };
   }
@@ -72,6 +79,8 @@ function getAuthContextFromRequest(req: Request): AuthContext {
     project_id: (extra.project_id as string) || 'quoth-knowledge-base',
     user_id: (extra.user_id as string) || 'anonymous',
     role: (extra.role as 'admin' | 'editor' | 'viewer') || 'viewer',
+    connection_id: extra.connection_id as string | undefined,
+    available_projects: extra.available_projects as AuthContext['available_projects'],
   };
 }
 
@@ -79,15 +88,36 @@ function getAuthContextFromRequest(req: Request): AuthContext {
  * Register tools and prompts on the MCP server
  */
 function setupServer(server: McpServer, authContext: AuthContext) {
+  // Initialize or update session if connection ID is available
+  if (authContext.connection_id && authContext.available_projects) {
+    sessionManager.createOrUpdateSession(
+      authContext.connection_id,
+      authContext.user_id,
+      authContext.project_id,
+      authContext.role,
+      authContext.available_projects
+    );
+
+    // Refresh auth context from session (in case account was switched)
+    const activeContext = sessionManager.getActiveContext(authContext.connection_id);
+    if (activeContext) {
+      authContext.project_id = activeContext.project_id;
+      authContext.role = activeContext.role;
+    }
+  }
+
   // Register all Quoth tools with authentication context
   registerQuothTools(server, authContext);
 
   // Register Prompts (Personas)
+  // IMPORTANT: Prompts are activated with /prompt command in Claude Code, NOT by calling them like tools
   server.registerPrompt(
     'quoth_architect',
     {
       description:
-        "Initialize the session for writing code or tests. Loads the 'Single Source of Truth' enforcement rules. Use this persona when generating new code.",
+        "🏗️ Code Generation Persona - Activate with '/prompt quoth_architect' in Claude Code. " +
+        "Enforces 'Single Source of Truth' rules by searching Quoth before generating any code. " +
+        "Use BEFORE writing code/tests to ensure patterns follow documented standards.",
     },
     async () => getArchitectPrompt()
   );
@@ -96,7 +126,9 @@ function setupServer(server: McpServer, authContext: AuthContext) {
     'quoth_auditor',
     {
       description:
-        'Initialize the session for reviewing code and updating documentation. Activates strict contrast rules between code and docs.',
+        "🔍 Code Review Persona - Activate with '/prompt quoth_auditor' in Claude Code. " +
+        "Reviews existing code against documented standards. Distinguishes VIOLATIONS (code breaking rules) " +
+        "from UPDATES_NEEDED (new patterns to document). Use DURING code review.",
     },
     async () => getAuditorPrompt()
   );
@@ -105,7 +137,9 @@ function setupServer(server: McpServer, authContext: AuthContext) {
     'quoth_documenter',
     {
       description:
-        'Initialize the session for proactive incremental documentation. Use when you want to document new code as you build. Say "document this [code/feature]" to trigger.',
+        "📝 Incremental Documentation Persona - Activate with '/prompt quoth_documenter' in Claude Code. " +
+        "Documents new code immediately after implementation. Fetches templates, follows structure, " +
+        "and submits proposals. Use WHILE building features. Say 'document this [code]' after activation.",
     },
     async () => getDocumenterPrompt()
   );
