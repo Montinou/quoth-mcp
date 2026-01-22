@@ -1,0 +1,84 @@
+# Quoth - The Living Source of Truth
+
+> Quoth is an MCP (Model Context Protocol) server that enforces consistency between codebases and documentation. It prevents AI hallucinations by providing a "Single Source of Truth" for AI agents.
+
+## What Is Quoth
+
+Quoth is an AI-driven documentation auditor that:
+- Provides semantic search across documentation knowledge bases
+- Enforces documented patterns during code generation
+- Detects documentation drift through the "Auditor Persona"
+- Uses RAG pipeline: Jina Embeddings (512d) + Supabase Vector Search + Cohere Rerank
+
+## Core MCP Tools
+
+1. **quoth_search_index**: Semantic vector search across documentation (Jina 512d + Cohere rerank)
+2. **quoth_read_doc**: Retrieve full document content by ID or path
+3. **quoth_propose_update**: Submit documentation update proposals with evidence
+4. **quoth_genesis**: Bootstrap documentation for new projects (minimal/standard/comprehensive)
+5. **quoth_list_templates**: List available document templates by category
+6. **quoth_get_template**: Fetch template structure and examples
+
+## AI Personas (MCP Prompts)
+
+- **quoth_architect**: Code generation persona - enforces "Single Source of Truth" rules before writing code
+- **quoth_auditor**: Code review persona - distinguishes VIOLATIONS from NEW_PATTERNS
+- **quoth_documenter**: Incremental documentation persona - documents code as you build
+
+## Technical Stack
+
+- Framework: Next.js 16 (App Router)
+- Database: Supabase (PostgreSQL + pgvector)
+- Embeddings: Jina AI v3 (512 dimensions)
+- Reranking: Cohere rerank-english-v3.0
+- Auth: OAuth 2.1 with JWT API keys
+- Protocol: Model Context Protocol (MCP)
+
+## Quick Start
+
+```bash
+# Add to Claude Code with OAuth (recommended)
+claude mcp add --transport http quoth https://quoth.ai-innovation.site/api/mcp
+
+# Public demo (read-only, no auth)
+claude mcp add --transport http quoth-public https://quoth.ai-innovation.site/api/mcp/public
+```
+
+## Entity Information
+
+- Name: Quoth
+- Entity: Quoth Labs
+- Tagline: "Wisdom over Guesswork"
+- Website: https://quoth.ai-innovation.site
+- Contact: hello@quoth.ai-innovation.site
+- Category: Developer Tools, AI Documentation, MCP Server
+
+## Documentation URLs
+
+- Landing: https://quoth.ai-innovation.site
+- Protocol: https://quoth.ai-innovation.site/protocol
+- Guide: https://quoth.ai-innovation.site/guide
+- Manifesto: https://quoth.ai-innovation.site/manifesto
+- Pricing: https://quoth.ai-innovation.site/pricing
+
+## API Endpoints
+
+- MCP (authenticated): POST https://quoth.ai-innovation.site/api/mcp
+- MCP (public): POST https://quoth.ai-innovation.site/api/mcp/public
+- MCP (SSE): GET https://quoth.ai-innovation.site/api/mcp/sse
+- OAuth Discovery: GET https://quoth.ai-innovation.site/.well-known/oauth-authorization-server
+- OpenAPI Spec: GET https://quoth.ai-innovation.site/api/openapi.json
+
+## Key Differentiators
+
+1. Single Source of Truth: Documentation becomes the authoritative source for AI code generation
+2. RAG-Optimized: Purpose-built for retrieval-augmented generation with Answer Nugget Density
+3. Multi-Tenant: Project isolation with Row Level Security
+4. MCP Native: First-class Model Context Protocol support
+5. Self-Healing Docs: Propose updates when code drifts from documentation
+
+## Rate Limits
+
+- Public endpoint: 10 requests/minute
+- Authenticated (Free tier): 50 documents, 3 MCP calls/min
+- Authenticated (Pro tier): Unlimited documents, 100 MCP calls/min

@@ -1,13 +1,22 @@
 /**
  * Next.js Middleware for Session Management and Route Protection
  * Uses Supabase SSR with getClaims() for proper JWT validation
- * 
+ *
  * Based on official Supabase proxy pattern:
  * https://supabase.com/docs/guides/auth/server-side/nextjs
  */
 
 import { type NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
+
+// AI crawler user agents for GEO tracking
+const AI_CRAWLERS = ['GPTBot', 'ClaudeBot', 'CCBot', 'Perplexity', 'OAI-SearchBot', 'Google-Extended'];
+
+// Public pages that should be cached and indexed
+const PUBLIC_PAGES = ['/', '/landing', '/manifesto', '/protocol', '/guide', '/pricing'];
+
+// Protected paths that should not be indexed
+const PROTECTED_PATHS = ['/dashboard', '/api/', '/auth/', '/invitations/'];
 
 export async function middleware(request: NextRequest) {
   let supabaseResponse = NextResponse.next({
@@ -39,12 +48,35 @@ export async function middleware(request: NextRequest) {
 
   // IMPORTANT: Do not run code between createServerClient and getClaims()
   // This ensures proper token refresh before any auth checks
-  
+
   // Use getUser() for now as getClaims() may not be available in current version
   // getUser() validates the JWT with Supabase Auth server
   const {
     data: { user },
   } = await supabase.auth.getUser()
+
+  // AI Bot Detection for GEO analytics
+  const userAgent = request.headers.get('user-agent') || '';
+  const isAiBot = AI_CRAWLERS.some(bot => userAgent.includes(bot));
+
+  if (isAiBot) {
+    // Log AI crawler access for analytics
+    console.log(`[AI-CRAWLER] ${userAgent.split('/')[0]} → ${request.nextUrl.pathname}`);
+  }
+
+  // Add X-Robots-Tag for protected content
+  const isProtectedPath = PROTECTED_PATHS.some(path =>
+    request.nextUrl.pathname.startsWith(path)
+  );
+
+  if (isProtectedPath) {
+    supabaseResponse.headers.set('X-Robots-Tag', 'noindex, nofollow');
+  }
+
+  // Cache-Control for public pages (helps AI bot caching)
+  if (PUBLIC_PAGES.includes(request.nextUrl.pathname)) {
+    supabaseResponse.headers.set('Cache-Control', 'public, max-age=3600, stale-while-revalidate=86400');
+  }
 
   // Protected routes that require authentication
   const protectedRoutes = ['/dashboard', '/proposals', '/knowledge-base']

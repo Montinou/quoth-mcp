@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { Github, Twitter } from "lucide-react";
 import { Logo } from "./Logo";
 import { cn } from "@/lib/utils";
 
@@ -46,29 +45,12 @@ export function Footer({ className, links = defaultLinks }: FooterProps) {
             ))}
           </div>
 
-          <div className="flex gap-6">
-            <a
-              href="https://github.com"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-gray-600 hover:text-white cursor-pointer transition-colors"
-            >
-              <Github size={20} strokeWidth={1.5} />
-            </a>
-            <a
-              href="https://twitter.com"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-gray-600 hover:text-white cursor-pointer transition-colors"
-            >
-              <Twitter size={20} strokeWidth={1.5} />
-            </a>
-          </div>
+          {/* Social links hidden until real accounts exist - E-E-A-T compliance */}
         </div>
 
         <div className="mt-8 pt-8 border-t border-white/5 text-center">
           <p className="text-gray-600 text-sm font-mono">
-            © 2025 Quoth Labs. "Wisdom over Guesswork."
+            &copy; 2025 Quoth Labs. &quot;Wisdom over Guesswork.&quot;
           </p>
         </div>
       </div>

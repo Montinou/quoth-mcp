@@ -9,6 +9,7 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
+import { FAQPageSchema } from "@/components/SchemaMarkup";
 
 const tiers = [
   {
@@ -101,6 +102,7 @@ const faqs = [
 export default function PricingPage() {
   return (
     <div className="min-h-screen animate-page-fade-in">
+      <FAQPageSchema faqs={faqs} />
       <Navbar />
 
       <PageHeader
