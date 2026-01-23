@@ -1,6 +1,6 @@
-import { MetadataRoute } from 'next';
+import type { MetadataRoute } from 'next';
 
-export default function sitemap(): MetadataRoute.Sitemap {
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const baseUrl = 'https://quoth.ai-innovation.site';
   const now = new Date().toISOString();
 

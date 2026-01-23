@@ -1,6 +1,6 @@
-import { MetadataRoute } from 'next';
+import type { MetadataRoute } from 'next';
 
-export default function robots(): MetadataRoute.Robots {
+export default async function robots(): Promise<MetadataRoute.Robots> {
   const baseUrl = 'https://quoth.ai-innovation.site';
 
   return {
