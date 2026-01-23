@@ -17,6 +17,7 @@ import {
 import { supabase } from '../supabase';
 import { registerGenesisTools } from './genesis';
 import { syncDocument } from '../sync';
+import { createActivityLogger } from './activity';
 import * as fs from 'fs';
 import * as path from 'path';
 import matter from 'gray-matter';
@@ -47,11 +48,25 @@ export function registerQuothTools(
       },
     },
     async ({ query }) => {
+      // Start activity logging with timing
+      const activityLogger = createActivityLogger({
+        projectId: authContext.project_id,
+        userId: authContext.user_id,
+        eventType: 'search',
+        query,
+      });
+
       try {
         // Use authContext.project_id for multi-tenant isolation
         const results = await searchDocuments(query, authContext.project_id);
 
         if (results.length === 0) {
+          // Log search with zero results
+          activityLogger.complete({
+            resultCount: 0,
+            patternsMatched: [],
+          });
+
           return {
             content: [
               {
@@ -85,6 +100,12 @@ export function registerQuothTools(
 </chunk>`;
         }).join('\n');
 
+        // Log successful search with results
+        activityLogger.complete({
+          resultCount: results.length,
+          patternsMatched: results.map(r => r.id),
+        });
+
         return {
           content: [
             {
@@ -105,6 +126,12 @@ Instructions:
           ],
         };
       } catch (error) {
+        // Log error case
+        activityLogger.complete({
+          resultCount: 0,
+          context: { error: error instanceof Error ? error.message : 'Unknown error' },
+        });
+
         return {
           content: [
             {
@@ -129,6 +156,14 @@ Instructions:
       },
     },
     async ({ doc_id }) => {
+      // Start activity logging with timing
+      const activityLogger = createActivityLogger({
+        projectId: authContext.project_id,
+        userId: authContext.user_id,
+        eventType: 'read',
+        documentId: doc_id,
+      });
+
       try {
         // Use authContext.project_id for multi-tenant isolation
         const doc = await readDocument(doc_id, authContext.project_id);
@@ -149,6 +184,11 @@ Instructions:
             suggestionText = `\n\nDid you mean one of these?\n${suggestions.map(s => `- ${s.id} (${s.path})`).join('\n')}`;
           }
 
+          // Log read attempt for non-existent document
+          activityLogger.complete({
+            context: { found: false, suggestions: suggestions.map(s => s.id) },
+          });
+
           return {
             content: [
               {
@@ -164,6 +204,12 @@ Instructions:
           .map(([key, value]) => `${key}: ${Array.isArray(value) ? `[${value.join(', ')}]` : value}`)
           .join('\n');
 
+        // Log successful document read
+        activityLogger.complete({
+          documentId: doc.id,
+          context: { found: true, documentPath: doc.path, documentTitle: doc.title },
+        });
+
         return {
           content: [
             {
@@ -173,6 +219,11 @@ Instructions:
           ],
         };
       } catch (error) {
+        // Log error case
+        activityLogger.complete({
+          context: { error: error instanceof Error ? error.message : 'Unknown error' },
+        });
+
         return {
           content: [
             {
