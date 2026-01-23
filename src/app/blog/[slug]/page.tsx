@@ -7,7 +7,7 @@ import { getPostBySlug, getAllPosts, getRelatedPosts } from '@/lib/content/blog'
 import { MDXContent } from '@/components/mdx';
 import { Navbar } from '@/components/quoth/Navbar';
 import { Footer } from '@/components/quoth/Footer';
-import { Calendar, Clock, ArrowLeft, ArrowRight } from 'lucide-react';
+import { Calendar, Clock, ArrowLeft } from 'lucide-react';
 
 interface Props {
   params: Promise<{ slug: string }>;
