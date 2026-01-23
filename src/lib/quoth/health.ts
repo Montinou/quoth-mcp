@@ -37,8 +37,8 @@ export interface ProjectHealthSummary {
 const THRESHOLDS = {
   fresh: 14,    // < 14 days = fresh
   aging: 30,    // 14-30 days = aging
-  stale: 60,    // 30-60 days = stale
-  critical: 60, // > 60 days = critical
+  stale: 60,    // 30-59 days = stale
+  critical: 60, // >= 60 days = critical
 };
 
 /**
