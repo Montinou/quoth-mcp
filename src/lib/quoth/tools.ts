@@ -20,6 +20,7 @@ import { syncDocument } from '../sync';
 import * as fs from 'fs';
 import * as path from 'path';
 import matter from 'gray-matter';
+import { logActivity } from './activity';
 
 // Templates directory path (relative to project root)
 const TEMPLATES_DIR = path.join(process.cwd(), 'quoth-knowledge-template', 'templates');
@@ -50,6 +51,20 @@ export function registerQuothTools(
       try {
         // Use authContext.project_id for multi-tenant isolation
         const results = await searchDocuments(query, authContext.project_id);
+
+        // Log activity (non-blocking)
+        const avgRelevance = results.length > 0
+          ? results.reduce((sum, r) => sum + (r.relevance || 0), 0) / results.length
+          : 0;
+        logActivity({
+          projectId: authContext.project_id,
+          userId: authContext.user_id,
+          eventType: 'search',
+          query,
+          resultCount: results.length,
+          relevanceScore: avgRelevance,
+          toolName: 'quoth_search_index',
+        });
 
         if (results.length === 0) {
           return {
@@ -132,6 +147,16 @@ Instructions:
       try {
         // Use authContext.project_id for multi-tenant isolation
         const doc = await readDocument(doc_id, authContext.project_id);
+
+        // Log activity (non-blocking)
+        logActivity({
+          projectId: authContext.project_id,
+          userId: authContext.user_id,
+          eventType: 'read',
+          query: doc_id,
+          resultCount: doc ? 1 : 0,
+          toolName: 'quoth_read_doc',
+        });
 
         if (!doc) {
           // Try to find similar documents within the user's project
