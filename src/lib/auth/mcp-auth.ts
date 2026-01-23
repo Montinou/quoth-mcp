@@ -222,44 +222,32 @@ async function verifyCustomJwt(token: string): Promise<AuthContext | null> {
  * Returns AuthContext if valid, null otherwise
  */
 export async function verifyMcpApiKey(token: string): Promise<AuthContext | null> {
-  console.log('[MCP Auth] verifyMcpApiKey called, token length:', token?.length);
-  console.log('[MCP Auth] Token preview:', token?.substring(0, 50) + '...');
-
   // Try to determine token type by decoding without verification
   try {
     const decoded = decodeJwt(token);
-    console.log('[MCP Auth] Decoded JWT:', { iss: decoded.iss, aud: decoded.aud, sub: decoded.sub });
 
     // Check if it's a custom JWT (has our specific issuer/audience)
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://quoth.ai-innovation.site';
     if (decoded.iss === appUrl && decoded.aud === 'mcp-server') {
-      console.log('[MCP Auth] Detected custom JWT, verifying...');
       return verifyCustomJwt(token);
     }
 
     // Check if it's a Supabase token (issuer matches Supabase URL pattern)
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     if (supabaseUrl && decoded.iss?.includes('supabase')) {
-      console.log('[MCP Auth] Detected Supabase token, verifying...');
       return verifySupabaseToken(token);
     }
-
-    console.log('[MCP Auth] Token type not determined from issuer, trying both methods');
-  } catch (err) {
-    console.log('[MCP Auth] Could not decode token as JWT:', err);
+  } catch {
     // Token couldn't be decoded, try both methods
   }
 
   // Try custom JWT first (faster, no network call)
-  console.log('[MCP Auth] Trying custom JWT verification...');
   const customAuth = await verifyCustomJwt(token);
   if (customAuth) {
-    console.log('[MCP Auth] Custom JWT verified successfully');
     return customAuth;
   }
 
   // Fall back to Supabase verification
-  console.log('[MCP Auth] Custom JWT failed, trying Supabase verification...');
   return verifySupabaseToken(token);
 }
 

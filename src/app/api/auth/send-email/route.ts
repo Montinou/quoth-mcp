@@ -41,17 +41,99 @@ interface AuthEmailPayload {
   };
 }
 
-// Verify webhook signature from Supabase Auth Hook
-// TEMP: Bypassed for debugging signup issue
-// TODO: Re-enable proper verification after fixing signup
-function verifyWebhookSignature(
-  _payload: string,
-  _signatureHeader: string | null,
-  _timestampHeader: string | null
-): boolean {
-  // TEMP: Always return true to debug signup issue
-  console.log('[Webhook] Signature verification bypassed for debugging');
-  return true;
+/**
+ * Verify webhook signature from Supabase Auth Hook
+ * Uses HMAC-SHA256 to verify the payload matches the signature
+ */
+async function verifyWebhookSignature(
+  payload: string,
+  signatureHeader: string | null,
+  timestampHeader: string | null
+): Promise<boolean> {
+  const webhookSecret = process.env.SUPABASE_WEBHOOK_SECRET;
+
+  // If no secret configured, reject all webhooks in production
+  if (!webhookSecret) {
+    if (process.env.NODE_ENV === 'production') {
+      console.error('[Webhook] SUPABASE_WEBHOOK_SECRET not configured - rejecting request');
+      return false;
+    }
+    // Allow in development without signature verification
+    console.warn('[Webhook] No webhook secret configured - allowing in development');
+    return true;
+  }
+
+  if (!signatureHeader) {
+    console.error('[Webhook] Missing signature header');
+    return false;
+  }
+
+  // Supabase uses svix-style signatures: v1,<signature1> v1,<signature2>
+  // Or simple signature format depending on hook configuration
+  try {
+    // Handle svix-style signature format
+    const signatures = signatureHeader.split(' ');
+
+    for (const sig of signatures) {
+      const parts = sig.split(',');
+      const version = parts[0];
+      const signature = parts[1] || parts[0]; // Handle both "v1,sig" and plain "sig"
+
+      if (version === 'v1' || !parts[1]) {
+        // Create HMAC of timestamp + payload (svix format) or just payload
+        const signedPayload = timestampHeader
+          ? `${timestampHeader}.${payload}`
+          : payload;
+
+        const encoder = new TextEncoder();
+        const key = await crypto.subtle.importKey(
+          'raw',
+          encoder.encode(webhookSecret),
+          { name: 'HMAC', hash: 'SHA-256' },
+          false,
+          ['sign']
+        );
+
+        const signatureBuffer = await crypto.subtle.sign(
+          'HMAC',
+          key,
+          encoder.encode(signedPayload)
+        );
+
+        // Convert to base64
+        const expectedSignature = Buffer.from(signatureBuffer).toString('base64');
+
+        // Constant-time comparison
+        if (signature === expectedSignature) {
+          return true;
+        }
+
+        // Also try hex format
+        const expectedSignatureHex = Buffer.from(signatureBuffer).toString('hex');
+        if (signature === expectedSignatureHex) {
+          return true;
+        }
+      }
+    }
+
+    // Check for replay attacks - timestamp should be within 5 minutes
+    if (timestampHeader) {
+      const timestamp = parseInt(timestampHeader, 10);
+      const now = Math.floor(Date.now() / 1000);
+      const tolerance = 300; // 5 minutes
+
+      if (Math.abs(now - timestamp) > tolerance) {
+        console.error('[Webhook] Timestamp outside tolerance window');
+        return false;
+      }
+    }
+
+    console.error('[Webhook] Signature verification failed - no matching signature');
+    return false;
+  } catch (error) {
+    console.error('[Webhook] Signature verification error:', error);
+    return false;
+  }
 }
 
 // Build action URL with token
@@ -89,7 +171,8 @@ export async function POST(request: Request) {
                       request.headers.get('webhook-timestamp');
 
     // Verify signature
-    if (!verifyWebhookSignature(rawBody, signature, timestamp)) {
+    const isValid = await verifyWebhookSignature(rawBody, signature, timestamp);
+    if (!isValid) {
       console.error('Invalid webhook signature');
       return NextResponse.json(
         { error: 'Invalid signature' },

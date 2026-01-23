@@ -45,7 +45,7 @@ export function registerQuothTools(
       description:
         'Performs semantic search across the Quoth documentation using AI embeddings. Returns relevant document chunks ranked by similarity. Much smarter than keyword matching - understands meaning and context.',
       inputSchema: {
-        query: z.string().describe('Natural language search query, e.g. "how to mock dependencies in tests", "database connection patterns"'),
+        query: z.string().max(1000).describe('Natural language search query, e.g. "how to mock dependencies in tests", "database connection patterns" (max 1000 chars)'),
       },
     },
     async ({ query }) => {
@@ -167,7 +167,7 @@ Instructions:
       description:
         'Retrieves the full content of a specific documentation file by its title or path. Returns the complete Markdown content with metadata.',
       inputSchema: {
-        doc_id: z.string().describe('The document title or file path, e.g. "backend-unit-vitest" or "patterns/backend-unit-vitest.md"'),
+        doc_id: z.string().max(500).describe('The document title or file path, e.g. "backend-unit-vitest" or "patterns/backend-unit-vitest.md"'),
       },
     },
     async ({ doc_id }) => {
@@ -269,10 +269,10 @@ Instructions:
       description:
         'Creates or updates documentation. For new documents, creates directly. For existing documents, either applies directly or creates a proposal depending on project settings.',
       inputSchema: {
-        doc_id: z.string().describe('The document title or path (e.g., "architecture/project-overview.md")'),
-        new_content: z.string().describe('The proposed new content (full Markdown with frontmatter)'),
-        evidence_snippet: z.string().describe('Code snippet or commit reference as evidence for the change'),
-        reasoning: z.string().describe('Explanation of why this update is needed'),
+        doc_id: z.string().max(500).describe('The document title or path (e.g., "architecture/project-overview.md")'),
+        new_content: z.string().max(500000).describe('The proposed new content (full Markdown with frontmatter, max 500KB)'),
+        evidence_snippet: z.string().max(10000).describe('Code snippet or commit reference as evidence for the change (max 10KB)'),
+        reasoning: z.string().max(5000).describe('Explanation of why this update is needed (max 5000 chars)'),
       },
     },
     async ({ doc_id, new_content, evidence_snippet, reasoning }) => {
@@ -597,7 +597,7 @@ ${formattedTemplates}
       description:
         'Retrieves a specific document template with full structure, examples, and embedding hints. Use templates to create well-indexed documentation. Templates are stored in the filesystem.',
       inputSchema: {
-        template_id: z.string()
+        template_id: z.string().max(500)
           .describe('Template path or ID, e.g. "templates/architecture/project-overview.md" or "project-overview"'),
       },
     },
@@ -838,7 +838,7 @@ ${chunk.content}
       description:
         'Switches the active project account. All subsequent Quoth operations (search, read, propose) will use the selected project context until switched again.',
       inputSchema: {
-        project_id: z.string().describe('The project ID to switch to (from quoth_list_accounts)'),
+        project_id: z.string().max(100).describe('The project ID to switch to (from quoth_list_accounts)'),
       },
     },
     async ({ project_id }) => {

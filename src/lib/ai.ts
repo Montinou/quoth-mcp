@@ -4,12 +4,23 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 const googleApiKey = process.env.GEMINIAI_API_KEY || process.env.GOOGLE_API_KEY;
 const jinaApiKey = process.env.JINA_API_KEY;
 
-if (!googleApiKey) {
-  console.warn("Warning: No Gemini API key found (GEMINIAI_API_KEY or GOOGLE_API_KEY)");
+// Debug logging - only in development with explicit flag
+const DEBUG_AI = process.env.NODE_ENV === 'development' && process.env.DEBUG_AI === 'true';
+
+function debugLog(...args: unknown[]) {
+  if (DEBUG_AI) {
+    console.log('[AI]', ...args);
+  }
 }
 
-if (!jinaApiKey) {
-  console.warn("Warning: No Jina API key found (JINA_API_KEY). Semantic search for code will fail.");
+// Startup warnings (only in development)
+if (process.env.NODE_ENV === 'development') {
+  if (!googleApiKey) {
+    console.warn("[AI] Warning: No Gemini API key found (GEMINIAI_API_KEY or GOOGLE_API_KEY)");
+  }
+  if (!jinaApiKey) {
+    console.warn("[AI] Warning: No Jina API key found (JINA_API_KEY). Semantic search for code will fail.");
+  }
 }
 
 const genAI = googleApiKey ? new GoogleGenerativeAI(googleApiKey) : null;
@@ -64,14 +75,13 @@ export async function generateJinaEmbedding(text: string): Promise<number[]> {
  * Generate embedding for search query using Jina
  */
 export async function generateQueryEmbedding(query: string): Promise<number[]> {
-  console.log('[EMBEDDING] Generating query embedding for:', query.slice(0, 100));
+  debugLog('Generating query embedding for:', query.slice(0, 100));
 
   if (!jinaApiKey) {
-    console.error('[EMBEDDING] Jina API key not configured');
     throw new Error("Jina API not configured. Set JINA_API_KEY");
   }
 
-  console.log('[EMBEDDING] Calling Jina API (model: jina-embeddings-v3, task: retrieval.query, dims: 512)');
+  debugLog('Calling Jina API (model: jina-embeddings-v3, task: retrieval.query, dims: 512)');
 
   const response = await fetch('https://api.jina.ai/v1/embeddings', {
     method: 'POST',
@@ -89,13 +99,12 @@ export async function generateQueryEmbedding(query: string): Promise<number[]> {
 
   if (!response.ok) {
     const errorText = await response.text();
-    console.error('[EMBEDDING] Jina API Error:', response.status, errorText);
     throw new Error(`Jina API Error: ${response.status} - ${errorText}`);
   }
 
   const data = await response.json();
   const embedding = data.data[0].embedding;
-  console.log('[EMBEDDING] Successfully generated:', embedding ? `${embedding.length} dimensions` : 'FAILED');
+  debugLog('Successfully generated:', embedding ? `${embedding.length} dimensions` : 'FAILED');
   return embedding;
 }
 
@@ -109,7 +118,7 @@ export async function generateEmbedding(text: string): Promise<number[]> {
     try {
       return await generateJinaEmbedding(text);
     } catch (e) {
-      console.warn("Jina generation failed, falling back to Gemini", e);
+      debugLog("Jina generation failed, falling back to Gemini", e);
     }
   }
 

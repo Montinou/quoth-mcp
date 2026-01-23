@@ -10,6 +10,15 @@ import type { DocumentReference, QuothDocument, ChunkReference, ChunkData, Chunk
 
 import { CohereClient } from "cohere-ai";
 
+// Debug logging - only in development with explicit flag
+const DEBUG_SEARCH = process.env.NODE_ENV === 'development' && process.env.DEBUG_SEARCH === 'true';
+
+function debugLog(...args: unknown[]) {
+  if (DEBUG_SEARCH) {
+    console.log('[SEARCH]', ...args);
+  }
+}
+
 // Initialize Cohere client if key is present
 const cohere = process.env.COHERE_API_KEY 
   ? new CohereClient({ token: process.env.COHERE_API_KEY }) 
@@ -32,7 +41,7 @@ export async function searchDocuments(
   query: string,
   projectId: string
 ): Promise<DocumentReference[]> {
-  console.log('[SEARCH] Starting search - Query:', query.slice(0, 100), 'ProjectID:', projectId);
+  debugLog('Starting search - Query:', query.slice(0, 100), 'ProjectID:', projectId);
 
   // Validate configuration
   if (!isSupabaseConfigured()) {
@@ -43,7 +52,7 @@ export async function searchDocuments(
   // Logic in ai.ts handles generating the right dimension (512 for Jina)
   // Note: search_query task_type is handled inside generateQueryEmbedding if using Jina
   const queryEmbedding = await import('../ai').then(m => m.generateQueryEmbedding ? m.generateQueryEmbedding(query) : m.generateEmbedding(query));
-  console.log('[SEARCH] Embedding generated:', queryEmbedding ? `${queryEmbedding.length} dimensions` : 'FAILED');
+  debugLog('Embedding generated:', queryEmbedding ? `${queryEmbedding.length} dimensions` : 'FAILED');
 
   // 1. Initial Retrieval (Vector Search)
   const { data: candidates, error } = await supabase.rpc('match_documents', {
@@ -53,17 +62,17 @@ export async function searchDocuments(
     filter_project_id: projectId,
   });
 
-  console.log('[SEARCH] RPC match_documents returned:', candidates?.length || 0, 'candidates', error ? `Error: ${error.message}` : '');
+  debugLog('RPC match_documents returned:', candidates?.length || 0, 'candidates', error ? `Error: ${error.message}` : '');
 
   if (error) throw new Error(`Search failed: ${error.message}`);
   if (!candidates || candidates.length === 0) {
-    console.warn('[SEARCH] No candidates found - returning empty results');
+    debugLog('No candidates found - returning empty results');
     return [];
   }
 
   // If Cohere is not configured, return vector results directly (fallback)
   if (!cohere) {
-    console.warn("Cohere API key not found. Skipping rerank step.");
+    debugLog('Cohere API key not found. Skipping rerank step.');
     return (candidates as MatchResult[])
       .slice(0, 10)
       .map(match => transformMatchToDocRef(match));
@@ -76,7 +85,7 @@ export async function searchDocuments(
     // Pass metadata to preserve context if needed
   }));
 
-  console.log('[SEARCH] Reranking', candidates.length, 'candidates with Cohere (model: rerank-english-v3.0)');
+  debugLog('Reranking', candidates.length, 'candidates with Cohere (model: rerank-english-v3.0)');
 
   try {
     const rerankResponse = await cohere.rerank({
@@ -86,14 +95,14 @@ export async function searchDocuments(
       topN: SEARCH_CONFIG.maxMatchCount, // Fetch up to max, then filter dynamically
     });
 
-    console.log('[SEARCH] Cohere rerank returned', rerankResponse.results.length, 'results');
+    debugLog('Cohere rerank returned', rerankResponse.results.length, 'results');
 
     // 3. Transform and Filter with dynamic cutoff
     const rerankedResults: DocumentReference[] = [];
 
     for (const result of rerankResponse.results) {
       if (result.relevanceScore < SEARCH_CONFIG.minRerankScore) {
-        console.log('[SEARCH] Filtering out result with score', result.relevanceScore, '(below min:', SEARCH_CONFIG.minRerankScore, ')');
+        debugLog('Filtering out result with score', result.relevanceScore, '(below min:', SEARCH_CONFIG.minRerankScore, ')');
         continue;
       }
 
@@ -103,16 +112,16 @@ export async function searchDocuments(
       // Dynamic cutoff: stop after minMatchCount if relevance drops below threshold
       if (rerankedResults.length >= SEARCH_CONFIG.minMatchCount &&
           result.relevanceScore < SEARCH_CONFIG.highRelevanceThreshold) {
-        console.log('[SEARCH] Dynamic cutoff reached at', rerankedResults.length, 'results (score:', result.relevanceScore, ')');
+        debugLog('Dynamic cutoff reached at', rerankedResults.length, 'results (score:', result.relevanceScore, ')');
         break;
       }
     }
 
-    console.log('[SEARCH] Returning', rerankedResults.length, 'reranked results');
+    debugLog('Returning', rerankedResults.length, 'reranked results');
     return rerankedResults;
 
   } catch (err) {
-    console.error("Reranking failed, falling back to vector results:", err);
+    console.error("[SEARCH] Reranking failed, falling back to vector results:", err);
     return (candidates as MatchResult[])
       .slice(0, 10)
       .map(match => transformMatchToDocRef(match));
@@ -304,7 +313,7 @@ export async function searchChunks(
 
     return rerankedResults;
   } catch (err) {
-    console.error("Reranking failed, falling back to vector results:", err);
+    console.error("[SEARCH] Chunk reranking failed, falling back to vector results:", err);
     return (candidates as MatchResult[])
       .slice(0, 15)
       .map(match => transformMatchToChunkRef(match));
