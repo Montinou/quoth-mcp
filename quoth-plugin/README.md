@@ -2,13 +2,12 @@
 
 Living documentation layer for AI-native development. This plugin automatically detects Quoth-connected projects and injects context reminding Claude to use documented patterns.
 
-## What It Does
+## Features
 
-When you start a Claude Code session in a project with Quoth configured:
-
-1. **Detects Quoth Configuration** - Looks for `.quoth/config.json` or `quoth.config.json`
-2. **Checks MCP Availability** - Verifies Quoth MCP server is connected
-3. **Injects Context** - Reminds Claude to search Quoth before writing code
+- **SessionStart**: Detects project, checks for Quoth docs, offers Genesis if missing
+- **PreToolUse (Edit/Write)**: Injects relevant patterns before code generation
+- **PostToolUse (Edit/Write)**: Audits generated code against documentation
+- **Stop**: Shows Quoth Badge with pattern summary
 
 ## Installation
 
@@ -53,6 +52,18 @@ claude mcp add --transport http quoth https://quoth.ai-innovation.site/api/mcp \
 
 ## Configuration
 
+### Plugin Settings
+
+Settings in `~/.claude/plugins/quoth.local.md`:
+
+```yaml
+---
+autoInjectPatterns: true
+showBadge: true
+auditEnabled: true
+---
+```
+
 ### Project-level Configuration
 
 Create a `.quoth/config.json` or `quoth.config.json` in your project root:
@@ -64,7 +75,11 @@ Create a `.quoth/config.json` or `quoth.config.json` in your project root:
 }
 ```
 
-### What the Plugin Injects
+## Skills
+
+- `/quoth-genesis` - Bootstrap documentation for a new project
+
+## What the Plugin Injects
 
 When Quoth is detected, the plugin adds context about:
 
@@ -81,7 +96,11 @@ quoth-plugin/
   hooks/
     hooks.json        # Hook configuration
     session-start.sh  # SessionStart hook - injects Quoth context
-    stop.sh           # Stop hook - placeholder for Phase 2 badges
+    pre-tool-use.sh   # PreToolUse hook - injects patterns
+    post-tool-use.sh  # PostToolUse hook - audits code
+    stop.sh           # Stop hook - shows badge summary
+  skills/
+    genesis.md        # Genesis skill for bootstrapping docs
   README.md           # This file
 ```
 
@@ -98,9 +117,22 @@ If found, injects context with:
 - Available tools list
 - Workflow guidance
 
-### Stop Hook (Phase 2)
+### PreToolUse Hook
 
-Placeholder for future badge system that will:
+Triggers before `Edit` or `Write` tools. Actions:
+- Searches Quoth for relevant patterns based on file path
+- Injects matching patterns into tool context
+
+### PostToolUse Hook
+
+Triggers after `Edit` or `Write` tools. Actions:
+- Audits generated code against documentation
+- Detects drift from documented patterns
+- Reports violations or new patterns
+
+### Stop Hook
+
+Triggers at session end. Displays:
 - Track documentation interaction counts
 - Display session summary
 - Award badges (Architect/Explorer/Observer/Wanderer)
