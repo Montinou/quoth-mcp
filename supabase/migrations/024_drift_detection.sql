@@ -42,6 +42,7 @@ CREATE TABLE IF NOT EXISTS drift_events (
 CREATE INDEX idx_drift_events_project_detected ON drift_events(project_id, detected_at DESC);
 CREATE INDEX idx_drift_events_severity ON drift_events(project_id, severity);
 CREATE INDEX idx_drift_events_unresolved ON drift_events(project_id, resolved) WHERE resolved = false;
+CREATE INDEX idx_drift_events_document ON drift_events(document_id) WHERE document_id IS NOT NULL;
 
 -- RLS policies
 ALTER TABLE drift_events ENABLE ROW LEVEL SECURITY;
@@ -74,10 +75,14 @@ CREATE POLICY "Editors can manage drift events"
     )
   );
 
--- Service role can insert (for plugin hooks)
+-- Service role can insert (for plugin hooks) with referential integrity
 CREATE POLICY "Service role can insert drift events"
   ON drift_events FOR INSERT
-  WITH CHECK (true);
+  WITH CHECK (
+    project_id IS NOT NULL
+    AND EXISTS (SELECT 1 FROM projects WHERE id = project_id)
+    AND (document_id IS NULL OR EXISTS (SELECT 1 FROM documents WHERE id = document_id))
+  );
 
 GRANT SELECT ON drift_events TO authenticated;
 GRANT INSERT, UPDATE ON drift_events TO authenticated;
