@@ -156,7 +156,7 @@ export function UsageAnalytics() {
                 ${
                   period === p
                     ? 'bg-violet-spectral text-white'
-                    : 'bg-graphite text-gray-400 hover:text-white hover:bg-graphite/80'
+                    : 'bg-graphite text-gray-400 hover:text-white hover:bg-charcoal'
                 }
               `}
             >
@@ -187,34 +187,16 @@ export function UsageAnalytics() {
           <>
             {/* Stat Cards Grid */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6 mb-10">
-              {statCards.map((stat, index) => {
-                const Icon = stat.icon;
-                return (
-                  <div
-                    key={stat.label}
-                    className="glass-panel rounded-2xl p-6 animate-stagger"
-                    style={{ animationDelay: `${index * 0.1}s` }}
-                  >
-                    <div className="flex items-center justify-between mb-4">
-                      <h3 className="text-sm font-medium text-gray-400">{stat.label}</h3>
-                      <div
-                        className={`
-                          p-2 rounded-lg transition-all duration-300
-                          ${stat.color === 'violet' ? 'bg-violet-spectral/15 text-violet-spectral' : ''}
-                          ${stat.color === 'blue' ? 'bg-blue-500/15 text-blue-400' : ''}
-                          ${stat.color === 'emerald' ? 'bg-emerald-muted/15 text-emerald-muted' : ''}
-                          ${stat.color === 'amber' ? 'bg-amber-warning/15 text-amber-warning' : ''}
-                        `}
-                      >
-                        <Icon className="w-5 h-5" strokeWidth={1.5} />
-                      </div>
-                    </div>
-                    <p className="text-3xl md:text-4xl font-bold text-white">
-                      {stat.value.toLocaleString()}
-                    </p>
-                  </div>
-                );
-              })}
+              {statCards.map((stat, index) => (
+                <StatCard
+                  key={stat.label}
+                  label={stat.label}
+                  value={stat.value}
+                  icon={stat.icon}
+                  color={stat.color}
+                  index={index}
+                />
+              ))}
             </div>
 
             {/* Top Searches */}
@@ -286,6 +268,45 @@ export function UsageAnalytics() {
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+/**
+ * StatCard Component
+ * Displays a single stat card with icon, label, and value
+ */
+interface StatCardProps {
+  label: string;
+  value: number;
+  icon: React.ComponentType<{ className?: string; strokeWidth?: number }>;
+  color: string;
+  index: number;
+}
+
+function StatCard({ label, value, icon: Icon, color, index }: StatCardProps) {
+  return (
+    <div
+      className="glass-panel rounded-2xl p-6 animate-stagger"
+      style={{ animationDelay: `${index * 0.1}s` }}
+    >
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-sm font-medium text-gray-400">{label}</h3>
+        <div
+          className={`
+            p-2 rounded-lg transition-all duration-300
+            ${color === 'violet' ? 'bg-violet-spectral/15 text-violet-spectral' : ''}
+            ${color === 'blue' ? 'bg-blue-500/15 text-blue-400' : ''}
+            ${color === 'emerald' ? 'bg-emerald-muted/15 text-emerald-muted' : ''}
+            ${color === 'amber' ? 'bg-amber-warning/15 text-amber-warning' : ''}
+          `}
+        >
+          <Icon className="w-5 h-5" strokeWidth={1.5} />
+        </div>
+      </div>
+      <p className="text-3xl md:text-4xl font-bold text-white">
+        {value.toLocaleString()}
+      </p>
     </div>
   );
 }

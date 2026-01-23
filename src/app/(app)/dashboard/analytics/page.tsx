@@ -57,7 +57,7 @@ function AnalyticsSkeleton() {
         {/* Timeline skeleton */}
         <div className="glass-panel rounded-2xl p-6">
           <Skeleton className="h-6 w-40 mb-4 bg-graphite" />
-          <Skeleton className="h-48 w-full bg-graphite" />
+          <Skeleton className="h-64 w-full bg-graphite" />
         </div>
       </div>
     </div>
