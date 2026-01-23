@@ -92,7 +92,7 @@ export default async function Image() {
             padding: '0 60px',
           }}
         >
-          {/* Badge - MCP Server */}
+          {/* Badge - Claude Plugin - MCP Server */}
           <div
             style={{
               display: 'flex',
