@@ -1,27 +1,70 @@
 import { ImageResponse } from 'next/og';
 
 export const runtime = 'edge';
-export const alt = 'Quoth - Wisdom over Guesswork';
+export const alt = 'Quoth - Nevermore Guess. Always Know.';
 export const size = { width: 1200, height: 630 };
 export const contentType = 'image/png';
 
 export default async function Image() {
+  // Load Cinzel font from Google Fonts
+  const cinzelFont = await fetch(
+    'https://fonts.gstatic.com/s/cinzel/v23/8vIU7ww63mVu7gtR-kwKxNvkNOjw-tbnfY3lCA.ttf'
+  ).then((res) => res.arrayBuffer());
+
   return new ImageResponse(
     (
       <div
         style={{
-          background: 'linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 50%, #262626 100%)',
+          background: '#050505',
           width: '100%',
           height: '100%',
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
           justifyContent: 'center',
-          fontFamily: 'system-ui, sans-serif',
           position: 'relative',
+          overflow: 'hidden',
         }}
       >
-        {/* Gradient overlay */}
+        {/* Background gradient - subtle violet glow at top */}
+        <div
+          style={{
+            position: 'absolute',
+            top: '-200px',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            width: '800px',
+            height: '600px',
+            background: 'radial-gradient(ellipse at center, rgba(139, 92, 246, 0.15) 0%, transparent 70%)',
+            filter: 'blur(60px)',
+          }}
+        />
+
+        {/* Secondary glow orbs */}
+        <div
+          style={{
+            position: 'absolute',
+            top: '40%',
+            left: '-100px',
+            width: '400px',
+            height: '400px',
+            background: 'radial-gradient(circle, rgba(124, 58, 237, 0.1) 0%, transparent 70%)',
+            filter: 'blur(80px)',
+          }}
+        />
+        <div
+          style={{
+            position: 'absolute',
+            bottom: '20%',
+            right: '-50px',
+            width: '300px',
+            height: '300px',
+            background: 'radial-gradient(circle, rgba(139, 92, 246, 0.08) 0%, transparent 70%)',
+            filter: 'blur(60px)',
+          }}
+        />
+
+        {/* Subtle grid pattern overlay */}
         <div
           style={{
             position: 'absolute',
@@ -29,7 +72,12 @@ export default async function Image() {
             left: 0,
             right: 0,
             bottom: 0,
-            background: 'radial-gradient(circle at 50% 50%, rgba(139, 92, 246, 0.15) 0%, transparent 50%)',
+            backgroundImage: `
+              linear-gradient(rgba(139, 92, 246, 0.03) 1px, transparent 1px),
+              linear-gradient(90deg, rgba(139, 92, 246, 0.03) 1px, transparent 1px)
+            `,
+            backgroundSize: '60px 60px',
+            opacity: 0.5,
           }}
         />
 
@@ -41,57 +89,103 @@ export default async function Image() {
             alignItems: 'center',
             justifyContent: 'center',
             zIndex: 1,
+            padding: '0 60px',
           }}
         >
-          {/* Logo text */}
+          {/* Badge - MCP Server */}
           <div
             style={{
-              fontSize: 96,
-              fontWeight: 700,
-              color: '#8B5CF6',
-              marginBottom: 16,
-              letterSpacing: '-0.02em',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              padding: '8px 20px',
+              borderRadius: '999px',
+              border: '1px solid rgba(255, 255, 255, 0.1)',
+              background: 'rgba(255, 255, 255, 0.05)',
+              marginBottom: '40px',
             }}
           >
-            Quoth
+            <div
+              style={{
+                width: '8px',
+                height: '8px',
+                borderRadius: '50%',
+                background: '#8B5CF6',
+                boxShadow: '0 0 10px rgba(139, 92, 246, 0.8)',
+              }}
+            />
+            <span
+              style={{
+                fontSize: '14px',
+                color: '#DDD6FE',
+                letterSpacing: '0.15em',
+                textTransform: 'uppercase',
+                fontFamily: 'system-ui, sans-serif',
+              }}
+            >
+              Model Context Protocol Server
+            </span>
           </div>
 
-          {/* Tagline */}
+          {/* Main Title - "Nevermore Guess." */}
           <div
             style={{
-              fontSize: 36,
-              color: '#DDD6FE',
-              marginBottom: 24,
-              fontWeight: 400,
+              fontSize: '72px',
+              fontWeight: 500,
+              color: '#FFFFFF',
+              fontFamily: 'Cinzel',
+              letterSpacing: '0.02em',
+              lineHeight: 1.1,
+              textAlign: 'center',
             }}
           >
-            The Living Source of Truth
+            Nevermore Guess.
+          </div>
+
+          {/* Second line - "Always Know." with gradient */}
+          <div
+            style={{
+              fontSize: '72px',
+              fontWeight: 500,
+              fontFamily: 'Cinzel',
+              letterSpacing: '0.02em',
+              lineHeight: 1.1,
+              textAlign: 'center',
+              marginBottom: '32px',
+              background: 'linear-gradient(135deg, #8B5CF6 0%, #DDD6FE 50%, #A78BFA 100%)',
+              backgroundClip: 'text',
+              color: 'transparent',
+            }}
+          >
+            Always Know.
           </div>
 
           {/* Subtitle */}
           <div
             style={{
-              fontSize: 24,
+              fontSize: '24px',
               color: '#9CA3AF',
-              maxWidth: 700,
+              maxWidth: '700px',
               textAlign: 'center',
-              lineHeight: 1.4,
+              lineHeight: 1.5,
+              fontFamily: 'system-ui, sans-serif',
+              fontWeight: 300,
             }}
           >
-            MCP server for documentation-driven development
+            The AI-driven auditor that aligns your codebase with your documentation.
           </div>
 
-          {/* Bottom tagline */}
+          {/* Secondary tagline */}
           <div
             style={{
-              position: 'absolute',
-              bottom: 48,
-              fontSize: 18,
+              fontSize: '18px',
               color: '#6B7280',
-              fontStyle: 'italic',
+              marginTop: '16px',
+              fontFamily: 'system-ui, sans-serif',
+              fontWeight: 300,
             }}
           >
-            Wisdom over Guesswork
+            Stop hallucinations. Enforce your architecture.
           </div>
         </div>
 
@@ -99,16 +193,65 @@ export default async function Image() {
         <div
           style={{
             position: 'absolute',
-            top: 24,
-            left: 24,
-            right: 24,
-            bottom: 24,
-            border: '1px solid rgba(139, 92, 246, 0.2)',
-            borderRadius: 16,
+            top: '24px',
+            left: '24px',
+            right: '24px',
+            bottom: '24px',
+            border: '1px solid rgba(139, 92, 246, 0.15)',
+            borderRadius: '16px',
           }}
         />
+
+        {/* Bottom brand mark */}
+        <div
+          style={{
+            position: 'absolute',
+            bottom: '40px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px',
+          }}
+        >
+          <div
+            style={{
+              fontSize: '20px',
+              color: '#8B5CF6',
+              fontFamily: 'Cinzel',
+              fontWeight: 600,
+            }}
+          >
+            Quoth
+          </div>
+          <div
+            style={{
+              width: '1px',
+              height: '16px',
+              background: 'rgba(139, 92, 246, 0.3)',
+            }}
+          />
+          <div
+            style={{
+              fontSize: '14px',
+              color: '#6B7280',
+              fontFamily: 'system-ui, sans-serif',
+              fontStyle: 'italic',
+            }}
+          >
+            Wisdom over Guesswork
+          </div>
+        </div>
       </div>
     ),
-    { ...size }
+    {
+      ...size,
+      fonts: [
+        {
+          name: 'Cinzel',
+          data: cinzelFont,
+          style: 'normal',
+          weight: 500,
+        },
+      ],
+    }
   );
 }
