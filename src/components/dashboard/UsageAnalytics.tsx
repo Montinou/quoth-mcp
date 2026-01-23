@@ -2,10 +2,11 @@
 
 /**
  * Usage Analytics Component
- * Displays MCP usage statistics with period selection and stat cards
+ * Displays MCP usage statistics with period selection, stat cards,
+ * and integrated Phase 3 insight components (HealthDashboard, MissRateChart, DriftTimeline)
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import {
   BarChart3,
@@ -13,8 +14,12 @@ import {
   FileText,
   TrendingUp,
   Activity,
-  Sparkles,
 } from 'lucide-react';
+
+// Phase 3 Insight Components
+import { HealthDashboard } from './HealthDashboard';
+import { MissRateChart } from './MissRateChart';
+import { DriftTimeline } from './DriftTimeline';
 
 type Period = '7d' | '30d' | '90d';
 
@@ -199,6 +204,16 @@ export function UsageAnalytics() {
               ))}
             </div>
 
+            {/* Phase 3 Insights: Health Dashboard & Miss Rate Chart */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-10">
+              <Suspense fallback={<InsightCardSkeleton />}>
+                <HealthDashboard projectId={profile.default_project_id} />
+              </Suspense>
+              <Suspense fallback={<InsightCardSkeleton />}>
+                <MissRateChart projectId={profile.default_project_id} />
+              </Suspense>
+            </div>
+
             {/* Top Searches */}
             <div className="glass-panel rounded-2xl p-6 mb-10">
               <div className="flex items-center gap-3 mb-6">
@@ -232,25 +247,10 @@ export function UsageAnalytics() {
               )}
             </div>
 
-            {/* Activity Timeline Placeholder */}
-            <div className="glass-panel rounded-2xl p-6">
-              <div className="flex items-center gap-3 mb-4">
-                <Sparkles className="w-5 h-5 text-violet-spectral" strokeWidth={1.5} />
-                <h2 className="text-xl font-bold text-white">Activity Timeline</h2>
-              </div>
-
-              <div className="flex flex-col items-center justify-center py-12 border border-dashed border-graphite rounded-xl bg-charcoal/30">
-                <div className="p-3 rounded-xl bg-violet-spectral/10 mb-4">
-                  <TrendingUp className="w-8 h-8 text-violet-spectral" strokeWidth={1.5} />
-                </div>
-                <p className="text-gray-400 text-center">
-                  Chart visualization coming in Phase 2
-                </p>
-                <p className="text-sm text-gray-500 mt-2">
-                  {Object.keys(stats.queriesPerDay).length} days of data available
-                </p>
-              </div>
-            </div>
+            {/* Phase 3 Insights: Drift Timeline (Full Width) */}
+            <Suspense fallback={<DriftTimelineSkeleton />}>
+              <DriftTimeline projectId={profile.default_project_id} />
+            </Suspense>
           </>
         )}
 
@@ -307,6 +307,67 @@ function StatCard({ label, value, icon: Icon, color, index }: StatCardProps) {
       <p className="text-3xl md:text-4xl font-bold text-white">
         {value.toLocaleString()}
       </p>
+    </div>
+  );
+}
+
+/**
+ * InsightCardSkeleton Component
+ * Loading skeleton for HealthDashboard and MissRateChart components
+ */
+function InsightCardSkeleton() {
+  return (
+    <div className="glass-panel rounded-2xl p-6 animate-pulse">
+      <div className="flex items-center gap-3 mb-6">
+        <div className="w-10 h-10 bg-charcoal rounded-xl" />
+        <div>
+          <div className="h-5 w-40 bg-charcoal rounded mb-2" />
+          <div className="h-4 w-24 bg-charcoal rounded" />
+        </div>
+      </div>
+      <div className="flex gap-6 mb-6">
+        <div className="h-32 w-32 bg-charcoal rounded-full shrink-0" />
+        <div className="flex-1 space-y-3">
+          <div className="h-4 bg-charcoal rounded w-3/4" />
+          <div className="h-6 bg-charcoal rounded" />
+          <div className="grid grid-cols-4 gap-2 mt-4">
+            {[...Array(4)].map((_, i) => (
+              <div key={i} className="h-16 bg-charcoal rounded-xl" />
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * DriftTimelineSkeleton Component
+ * Loading skeleton for DriftTimeline component
+ */
+function DriftTimelineSkeleton() {
+  return (
+    <div className="glass-panel rounded-2xl p-6 animate-pulse">
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 bg-charcoal rounded-xl" />
+          <div>
+            <div className="h-5 w-32 bg-charcoal rounded mb-2" />
+            <div className="h-4 w-48 bg-charcoal rounded" />
+          </div>
+        </div>
+        <div className="w-8 h-8 bg-charcoal rounded-lg" />
+      </div>
+      <div className="grid grid-cols-4 gap-3 mb-6">
+        {[...Array(4)].map((_, i) => (
+          <div key={i} className="h-20 bg-charcoal rounded-lg" />
+        ))}
+      </div>
+      <div className="space-y-3">
+        {[...Array(3)].map((_, i) => (
+          <div key={i} className="h-24 bg-charcoal rounded-xl" />
+        ))}
+      </div>
     </div>
   );
 }

@@ -1,0 +1,38 @@
+# Weekly Health Report Cron
+# Runs every Monday at 9:00 AM UTC and triggers the health report endpoint
+# Replaces Vercel crons (which require paid plan)
+
+name: Weekly Health Report
+
+on:
+  schedule:
+    # Every Monday at 9:00 AM UTC
+    - cron: '0 9 * * 1'
+  # Allow manual trigger for testing
+  workflow_dispatch:
+
+jobs:
+  send-report:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Weekly Health Report
+        run: |
+          response=$(curl -s -w "\n%{http_code}" \
+            -X GET \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            "${{ vars.APP_URL || 'https://quoth.ai-innovation.site' }}/api/cron/weekly-health-report")
+
+          # Extract body and status code
+          body=$(echo "$response" | head -n -1)
+          status=$(echo "$response" | tail -n 1)
+
+          echo "Response: $body"
+          echo "Status: $status"
+
+          # Fail if not 2xx
+          if [[ ! "$status" =~ ^2 ]]; then
+            echo "Request failed with status $status"
+            exit 1
+          fi
+
+          echo "Weekly health report sent successfully!"

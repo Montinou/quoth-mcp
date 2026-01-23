@@ -6,6 +6,7 @@
 import { Resend } from 'resend';
 import { render } from '@react-email/render';
 import { TeamInvitationEmail } from '@/emails/TeamInvitationEmail';
+import { WeeklyHealthReportEmail } from '@/emails/WeeklyHealthReportEmail';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -349,5 +350,78 @@ export async function sendTeamInvitationEmail(params: TeamInvitationParams): Pro
   } catch (error) {
     console.error('Failed to send invitation email:', error);
     // Don't throw - email failures shouldn't block the invitation workflow
+  }
+}
+
+/**
+ * Weekly health report email params
+ */
+export interface WeeklyReportParams {
+  projectName: string;
+  projectSlug: string;
+  periodStart: string;
+  periodEnd: string;
+  health: {
+    overallScore: number;
+    totalDocs: number;
+    freshDocs: number;
+    agingDocs: number;
+    staleDocs: number;
+    criticalDocs: number;
+  };
+  drift: {
+    total: number;
+    critical: number;
+    warning: number;
+    unresolvedCount: number;
+  };
+  missRate: {
+    averageMissRate: number;
+    trend: 'improving' | 'stable' | 'degrading';
+    topMissedQueries: Array<{ query: string; missCount: number }>;
+  };
+  recipients: string[];
+}
+
+/**
+ * Send weekly health report to project team
+ */
+export async function sendWeeklyHealthReport(params: WeeklyReportParams): Promise<void> {
+  if (!process.env.RESEND_API_KEY) {
+    console.warn('[Email] Resend not configured. Skipping weekly report.');
+    return;
+  }
+
+  const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://quoth.ai-innovation.site';
+  const dashboardUrl = `${APP_URL}/dashboard/${params.projectSlug}`;
+
+  try {
+    const html = await render(
+      WeeklyHealthReportEmail({
+        projectName: params.projectName,
+        projectSlug: params.projectSlug,
+        periodStart: params.periodStart,
+        periodEnd: params.periodEnd,
+        health: params.health,
+        drift: params.drift,
+        missRate: params.missRate,
+        dashboardUrl,
+      })
+    );
+
+    // Send to each recipient
+    for (const email of params.recipients) {
+      await resend.emails.send({
+        from: FROM_EMAIL,
+        to: email,
+        subject: `[Quoth] Weekly Health Report: ${params.projectName}`,
+        html,
+      });
+    }
+
+    console.log(`[Email] Weekly report sent to ${params.recipients.length} recipients`);
+  } catch (error) {
+    console.error('[Email] Failed to send weekly report:', error);
+    // Don't throw - email failures shouldn't block the cron workflow
   }
 }
