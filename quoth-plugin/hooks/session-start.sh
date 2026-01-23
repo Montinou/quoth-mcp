@@ -2,83 +2,92 @@
 # Quoth Plugin - SessionStart Hook
 # Detects Quoth configuration and injects context into Claude Code sessions
 
-set -e
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/lib/common.sh"
 
-# Initialize context parts
-HAS_CONFIG=false
-HAS_MCP=false
-PROJECT_ID=""
-CONTEXT_PARTS=()
+# ============================================================================
+# CONTEXT TEMPLATES
+# ============================================================================
 
-# Check for Quoth configuration files
-if [ -f ".quoth/config.json" ]; then
-    HAS_CONFIG=true
-    # Try to extract project_id from config
-    PROJECT_ID=$(cat .quoth/config.json 2>/dev/null | grep -o '"project_id"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*"\([^"]*\)"$/\1/' || echo "")
-elif [ -f "quoth.config.json" ]; then
-    HAS_CONFIG=true
-    PROJECT_ID=$(cat quoth.config.json 2>/dev/null | grep -o '"project_id"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*"\([^"]*\)"$/\1/' || echo "")
-fi
+get_active_context() {
+    echo "## Quoth Documentation System Active
 
-# Check if Quoth MCP server is available
-if command -v claude &> /dev/null; then
-    if claude mcp list 2>/dev/null | grep -q "quoth"; then
-        HAS_MCP=true
-    fi
-fi
+This project uses Quoth as its Single Source of Truth for documentation.
 
-# Build context message based on what's found
-if [ "$HAS_CONFIG" = true ] || [ "$HAS_MCP" = true ]; then
-    CONTEXT_PARTS+=("## Quoth Documentation System Detected")
-    CONTEXT_PARTS+=("")
-    CONTEXT_PARTS+=("This project uses Quoth as its Single Source of Truth for documentation.")
-    CONTEXT_PARTS+=("")
+### Before Writing Code
 
-    if [ "$HAS_CONFIG" = true ]; then
-        CONTEXT_PARTS+=("**Configuration:** Found Quoth config file")
-        if [ -n "$PROJECT_ID" ]; then
-            CONTEXT_PARTS+=("**Project ID:** $PROJECT_ID")
-        fi
-    fi
+1. **Search Quoth first** - Use quoth_search_index to find existing patterns
+2. **Follow documented patterns** - Use quoth_read_doc to read full documentation
+3. **Propose updates** - If you find outdated docs, use quoth_propose_update
 
-    if [ "$HAS_MCP" = true ]; then
-        CONTEXT_PARTS+=("**MCP Server:** Quoth MCP is available")
-    fi
+### Available Quoth Tools
 
-    CONTEXT_PARTS+=("")
-    CONTEXT_PARTS+=("### Before Writing Code")
-    CONTEXT_PARTS+=("")
-    CONTEXT_PARTS+=("1. **Search Quoth first** - Use \`quoth_search_index\` to find existing patterns")
-    CONTEXT_PARTS+=("2. **Follow documented patterns** - Use \`quoth_read_doc\` to read full documentation")
-    CONTEXT_PARTS+=("3. **Propose updates** - If you find outdated docs, use \`quoth_propose_update\`")
-    CONTEXT_PARTS+=("")
-    CONTEXT_PARTS+=("### Available Quoth Tools")
-    CONTEXT_PARTS+=("")
-    CONTEXT_PARTS+=("- \`quoth_search_index\` - Semantic search across documentation")
-    CONTEXT_PARTS+=("- \`quoth_read_doc\` - Read full document content")
-    CONTEXT_PARTS+=("- \`quoth_propose_update\` - Submit documentation updates")
-    CONTEXT_PARTS+=("- \`quoth_genesis\` - Bootstrap documentation for new projects")
-    CONTEXT_PARTS+=("")
-    CONTEXT_PARTS+=("**Remember:** Documentation is the intended design. When code conflicts with docs, docs are correct.")
+- quoth_search_index - Semantic search across documentation
+- quoth_read_doc - Read full document content
+- quoth_propose_update - Submit documentation updates
+- quoth_genesis - Bootstrap documentation for new projects
 
-    # Join context parts with newlines
-    CONTEXT=""
-    for part in "${CONTEXT_PARTS[@]}"; do
-        CONTEXT="${CONTEXT}${part}\n"
-    done
-
-    # Escape the context for JSON
-    ESCAPED_CONTEXT=$(printf '%s' "$CONTEXT" | sed 's/\\/\\\\/g' | sed 's/"/\\"/g' | sed 's/\t/\\t/g' | tr '\n' ' ' | sed 's/\\n /\\n/g')
-
-    # Output JSON with additionalContext
-    cat << EOF
-{
-  "hookSpecificOutput": {
-    "additionalContext": "$ESCAPED_CONTEXT"
-  }
+**Remember:** Documentation is the intended design. When code conflicts with docs, docs are correct."
 }
-EOF
-else
-    # No Quoth detected, output empty response
-    echo '{}'
-fi
+
+get_genesis_context() {
+    echo "## Quoth MCP Detected - No Project Documentation
+
+This project does not have Quoth documentation yet.
+
+### Get Started
+
+Run /quoth-genesis to bootstrap documentation for this project.
+
+Genesis will:
+1. Analyze your codebase structure
+2. Detect your tech stack
+3. Generate foundational documentation
+4. Configure Quoth for this project
+
+### Or Connect Existing Project
+
+If this project already has Quoth docs, create a config file:
+
+mkdir -p .quoth
+echo '{\"project_id\": \"YOUR_PROJECT_ID\"}' > .quoth/config.json"
+}
+
+# ============================================================================
+# MAIN LOGIC
+# ============================================================================
+
+main() {
+    # Step 1: Check if Quoth MCP is installed
+    if ! quoth_mcp_installed; then
+        output_empty
+        exit 0
+    fi
+
+    # Step 2: Find project config
+    local config_path=$(find_quoth_config)
+    local project_id=""
+    local has_docs=false
+
+    if [ -n "$config_path" ]; then
+        project_id=$(get_config_value "project_id" "$config_path")
+        has_docs=true
+    fi
+
+    # Step 3: Initialize session state
+    init_session "$project_id"
+
+    # Step 4: Build context based on what's found
+    local context=""
+
+    if [ "$has_docs" = true ]; then
+        context=$(get_active_context)
+    else
+        context=$(get_genesis_context)
+    fi
+
+    # Step 5: Output context
+    output_context "$context"
+}
+
+main "$@"
