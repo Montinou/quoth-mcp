@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Quoth Plugin - Stop Hook
 # Placeholder for Phase 2 badge system
 # Will track documentation interactions and display session summary

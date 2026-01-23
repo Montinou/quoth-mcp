@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Quoth Plugin - SessionStart Hook
 # Detects Quoth configuration and injects context into Claude Code sessions
 
