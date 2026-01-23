@@ -1,8 +1,9 @@
 // src/components/mdx/Card.tsx
 
 import Link from 'next/link';
-import { ArrowRight, LucideIcon } from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
 import * as Icons from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 
 interface CardProps {
   title: string;
@@ -11,8 +12,14 @@ interface CardProps {
   icon?: string;
 }
 
+// Type-safe icon lookup from lucide-react
+function getIcon(name: string): LucideIcon | null {
+  const icon = (Icons as unknown as Record<string, LucideIcon>)[name];
+  return typeof icon === 'function' ? icon : null;
+}
+
 export function Card({ title, description, href, icon }: CardProps) {
-  const Icon = icon ? (Icons as Record<string, LucideIcon>)[icon] : null;
+  const Icon = icon ? getIcon(icon) : null;
 
   return (
     <Link
