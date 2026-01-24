@@ -10,10 +10,35 @@ import {
   CardFooter,
 } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
-import type { LucideIcon } from "lucide-react";
+import {
+  Database,
+  ShieldAlert,
+  History,
+  BookOpen,
+  Scale,
+  RefreshCw,
+  Eye,
+} from "lucide-react";
+
+/**
+ * Map of icon names to Lucide icon components
+ * Using string names allows Server Components to pass icons without serialization issues
+ */
+const ICON_MAP = {
+  database: Database,
+  "shield-alert": ShieldAlert,
+  history: History,
+  "book-open": BookOpen,
+  scale: Scale,
+  "refresh-cw": RefreshCw,
+  eye: Eye,
+} as const;
+
+export type GlassCardIconName = keyof typeof ICON_MAP;
 
 interface GlassCardProps extends React.HTMLAttributes<HTMLDivElement> {
-  icon?: LucideIcon;
+  /** Icon name from the supported icon set (enables Server Component usage) */
+  iconName?: GlassCardIconName;
   title?: string;
   description?: string;
   children?: React.ReactNode;
@@ -22,7 +47,7 @@ interface GlassCardProps extends React.HTMLAttributes<HTMLDivElement> {
 }
 
 export function GlassCard({
-  icon: Icon,
+  iconName,
   title,
   description,
   children,
@@ -31,6 +56,8 @@ export function GlassCard({
   className,
   ...props
 }: GlassCardProps) {
+  const Icon = iconName ? ICON_MAP[iconName] : null;
+
   return (
     <Card
       className={cn(

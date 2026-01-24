@@ -1,6 +1,10 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // Optimize package imports for faster cold starts and dev boot
+  experimental: {
+    optimizePackageImports: ['lucide-react'],
+  },
   // Include WASM files in serverless function bundles for Vercel
   outputFileTracingIncludes: {
     // MCP routes that use AST chunking via search/sync

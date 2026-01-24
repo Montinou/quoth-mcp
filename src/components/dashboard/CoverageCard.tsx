@@ -115,7 +115,10 @@ export function CoverageCard({ projectId, initialCoverage }: CoverageCardProps) 
             border border-violet-spectral/30 transition-all duration-300
             disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
+          {/* Wrap SVG in div for hardware-accelerated animation */}
+          <div className={isLoading ? 'animate-spin' : ''}>
+            <RefreshCw className="w-4 h-4" />
+          </div>
           {isLoading ? 'Scanning...' : 'Scan'}
         </button>
       </div>

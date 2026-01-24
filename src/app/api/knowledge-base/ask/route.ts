@@ -66,33 +66,37 @@ export async function POST(request: Request) {
     }
 
     // 3. Fetch full content for top results to build context
+    // Parallelize document fetches for ~80% latency reduction (5 RTTs → 1 RTT)
     const topResults = searchResults.slice(0, 5);
-    console.log('[ASK API] Fetching full content for top', topResults.length, 'results');
-    const contexts: RAGContext[] = [];
+    console.log('[ASK API] Fetching full content for top', topResults.length, 'results in parallel');
 
-    for (const result of topResults) {
-      // Get full document content
-      const { data: doc, error: fetchError } = await supabase
+    const documentPromises = topResults.map((result) =>
+      supabase
         .from('documents')
         .select('content')
         .eq('project_id', membership.project_id)
         .eq('file_path', result.path)
-        .single();
+        .single()
+    );
 
-      if (fetchError) {
-        console.error('Document fetch error:', fetchError.message, 'for path:', result.path);
-        continue; // Skip this document but continue with others
-      }
+    const documentResults = await Promise.all(documentPromises);
 
-      if (doc) {
-        contexts.push({
-          title: result.title,
-          path: result.path,
+    const contexts: RAGContext[] = documentResults
+      .map((result, index) => {
+        const { data: doc, error: fetchError } = result;
+        if (fetchError) {
+          console.error('Document fetch error:', fetchError.message, 'for path:', topResults[index].path);
+          return null;
+        }
+        if (!doc) return null;
+        return {
+          title: topResults[index].title,
+          path: topResults[index].path,
           content: doc.content.slice(0, 3000), // Limit content per doc
-          relevance: result.relevance,
-        });
-      }
-    }
+          relevance: topResults[index].relevance,
+        };
+      })
+      .filter((ctx): ctx is RAGContext => ctx !== null);
 
     // 4. Generate AI answer using Gemini 2.0 Flash
     console.log('[ASK API] Generating RAG answer with', contexts.length, 'contexts');

@@ -236,7 +236,8 @@ export default function KnowledgeBasePage() {
         {/* Loading State */}
         {loading && (
           <div className="glass-panel rounded-2xl p-12 text-center mb-8 animate-content-reveal">
-            <div className="inline-flex p-4 rounded-2xl bg-violet-spectral/10 mb-4">
+            {/* Wrap SVG in div for hardware-accelerated animation */}
+            <div className="inline-flex p-4 rounded-2xl bg-violet-spectral/10 mb-4 animate-spin">
               <Loader2 className="w-8 h-8 text-violet-spectral spinner-glow" />
             </div>
             <p className="text-gray-400">Searching through documentation...</p>

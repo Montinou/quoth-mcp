@@ -3,10 +3,12 @@
 /**
  * Activity Card Component
  * Displays usage analytics for Quoth tools
+ * Migrated to SWR for request deduplication, caching, and automatic revalidation
  */
 
-import { useState, useEffect } from 'react';
+import useSWR from 'swr';
 import { Activity, Search, FileText, GitPullRequest, TrendingUp } from 'lucide-react';
+import { fetcher } from '@/lib/swr';
 
 interface ActivitySummary {
   totalQueries: number;
@@ -17,31 +19,25 @@ interface ActivitySummary {
   missRate: number;
 }
 
+interface ActivityResponse {
+  activity: ActivitySummary | null;
+}
+
 interface ActivityCardProps {
   projectId: string;
 }
 
 export function ActivityCard({ projectId }: ActivityCardProps) {
-  const [activity, setActivity] = useState<ActivitySummary | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    async function fetchActivity() {
-      try {
-        const res = await fetch(`/api/projects/${projectId}/activity`);
-        if (!res.ok) throw new Error('Failed to fetch activity');
-        const data = await res.json();
-        setActivity(data.activity);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Unknown error');
-      } finally {
-        setIsLoading(false);
-      }
+  const { data, error, isLoading } = useSWR<ActivityResponse>(
+    `/api/projects/${projectId}/activity`,
+    fetcher,
+    {
+      revalidateOnFocus: true,
+      dedupingInterval: 5000, // Dedupe requests within 5 seconds
     }
+  );
 
-    fetchActivity();
-  }, [projectId]);
+  const activity = data?.activity ?? null;
 
   if (isLoading) {
     return (
@@ -55,7 +51,7 @@ export function ActivityCard({ projectId }: ActivityCardProps) {
   if (error) {
     return (
       <div className="glass-panel rounded-2xl p-6">
-        <p className="text-red-400">{error}</p>
+        <p className="text-red-400">{error instanceof Error ? error.message : 'Failed to load activity'}</p>
       </div>
     );
   }

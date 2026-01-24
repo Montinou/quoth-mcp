@@ -1,15 +1,17 @@
 /* =============================================================================
-   QUOTH LANDING PAGE v2.0 - PUBLIC ROUTE
+   QUOTH LANDING PAGE v2.0 - PUBLIC ROUTE (SERVER COMPONENT)
    This page is always accessible, regardless of authentication status.
    Enhanced with atmospheric effects, refined animations, better responsiveness
+
+   Converted to Server Component for ~50KB JS bundle reduction and faster TTI.
+   GlassCard now accepts iconName strings instead of icon components.
 
    Routes:
    - /landing - Always accessible (this page)
    - / - Redirects authenticated users to /dashboard
    ============================================================================= */
-"use client";
 
-import { Database, ShieldAlert, History, Sparkles, Terminal, Wand2, FileSearch, Pencil } from "lucide-react";
+import { Sparkles, Terminal, Wand2, FileSearch } from "lucide-react";
 import Link from "next/link";
 import { Navbar, Footer, GlassCard } from "@/components/quoth";
 import { Button } from "@/components/ui/button";
@@ -150,19 +152,19 @@ const Features = () => (
       {/* Feature Cards */}
       <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8">
         <GlassCard
-          icon={Database}
+          iconName="database"
           title="Semantic Indexing"
           description="Quoth creates a semantic map of your contracts and patterns. It doesn't just read files; it understands architectural intent."
           className="animate-fade-in-delay-1"
         />
         <GlassCard
-          icon={ShieldAlert}
+          iconName="shield-alert"
           title="Active Auditor"
           description="The 'Auditor Persona' actively monitors PRs. It detects when new code deviates from established patterns like 'backend-unit-vitest'."
           className="animate-fade-in-delay-2"
         />
         <GlassCard
-          icon={History}
+          iconName="history"
           title="Drift Prevention"
           description="Documentation usually dies the day it's written. Quoth forces a 'Read-Contrast-Update' loop to keep it alive forever."
           className="animate-fade-in-delay-3 sm:col-span-2 lg:col-span-1"

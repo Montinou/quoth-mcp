@@ -83,12 +83,12 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Initialize from cache to avoid flicker on navigation
-  const cachedProfile = getCachedProfile();
+  // Use lazy initialization to avoid unnecessary localStorage reads on every render
   const [user, setUser] = useState<User | null>(null);
-  const [profile, setProfile] = useState<Profile | null>(cachedProfile);
+  const [profile, setProfile] = useState<Profile | null>(() => getCachedProfile());
   const [session, setSession] = useState<Session | null>(null);
   // If we have a cached profile, don't show loading state (profile will show instantly)
-  const [loading, setLoading] = useState(!cachedProfile);
+  const [loading, setLoading] = useState(() => !getCachedProfile());
   const [profileLoading, setProfileLoading] = useState(false);
   const [profileError, setProfileError] = useState<string | null>(null);
   const [supabase] = useState(() => createClient());

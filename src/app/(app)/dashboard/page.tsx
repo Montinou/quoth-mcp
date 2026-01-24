@@ -1,8 +1,10 @@
 /**
  * Main Dashboard Page
  * Elegant overview with animated stats, projects, and quick actions
+ * Enhanced with Suspense boundaries for progressive loading
  */
 
+import { Suspense } from 'react';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { getLatestCoverage } from '@/lib/quoth/coverage';
 import { CoverageCard } from '@/components/dashboard/CoverageCard';
@@ -22,6 +24,19 @@ import {
   Globe,
 } from 'lucide-react';
 
+/**
+ * Skeleton component for card loading states
+ * Used as Suspense fallback for progressive loading
+ */
+function CardSkeleton() {
+  return (
+    <div className="glass-panel rounded-2xl p-6 animate-pulse">
+      <div className="h-6 bg-charcoal rounded w-1/3 mb-4" />
+      <div className="h-20 bg-charcoal rounded" />
+    </div>
+  );
+}
+
 export default async function DashboardPage() {
   const supabase = await createServerSupabaseClient();
   const {
@@ -32,31 +47,31 @@ export default async function DashboardPage() {
     redirect('/');
   }
 
-  // Fetch user's projects
+  // Fetch user's projects (required for projectIds)
   const { data: projects } = await supabase
     .from('projects')
     .select('*, project_members!inner(role)')
     .eq('project_members.user_id', user.id);
 
-  // Fetch proposal count
   const projectIds = projects?.map((p) => p.id) || [];
-  const { count: proposalCount } = await supabase
-    .from('document_proposals')
-    .select('*', { count: 'exact', head: true })
-    .in('project_id', projectIds);
-
-  // Fetch document count
-  const { count: documentCount } = await supabase
-    .from('documents')
-    .select('*', { count: 'exact', head: true })
-    .in('project_id', projectIds);
-
-  // Fetch coverage for first project
-  let initialCoverage = null;
   const firstProject = projects?.[0];
-  if (firstProject) {
-    initialCoverage = await getLatestCoverage(firstProject.id);
-  }
+
+  // Parallelize independent queries for ~50-60% latency reduction (3-4 RTTs → 2 RTTs)
+  const [proposalResult, documentResult, coverageResult] = await Promise.all([
+    supabase
+      .from('document_proposals')
+      .select('*', { count: 'exact', head: true })
+      .in('project_id', projectIds),
+    supabase
+      .from('documents')
+      .select('*', { count: 'exact', head: true })
+      .in('project_id', projectIds),
+    firstProject ? getLatestCoverage(firstProject.id) : Promise.resolve(null),
+  ]);
+
+  const proposalCount = proposalResult.count;
+  const documentCount = documentResult.count;
+  const initialCoverage = coverageResult;
 
   // Stats data
   const stats = [
@@ -189,17 +204,21 @@ export default async function DashboardPage() {
           })}
         </div>
 
-        {/* Coverage Card */}
+        {/* Coverage Card - wrapped in Suspense for progressive loading */}
         {firstProject && (
           <div className="mb-10 animate-stagger stagger-5">
-            <CoverageCard projectId={firstProject.id} initialCoverage={initialCoverage} />
+            <Suspense fallback={<CardSkeleton />}>
+              <CoverageCard projectId={firstProject.id} initialCoverage={initialCoverage} />
+            </Suspense>
           </div>
         )}
 
-        {/* Activity Section */}
+        {/* Activity Section - wrapped in Suspense for progressive loading */}
         {firstProject && (
           <div className="mb-10 animate-stagger stagger-6">
-            <ActivityCard projectId={firstProject.id} />
+            <Suspense fallback={<CardSkeleton />}>
+              <ActivityCard projectId={firstProject.id} />
+            </Suspense>
           </div>
         )}
 

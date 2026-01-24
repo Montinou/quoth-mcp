@@ -1,12 +1,21 @@
-"use client";
+/* =============================================================================
+   QUOTH MANIFESTO PAGE (SERVER COMPONENT)
+   Converted to Server Component for bundle size reduction.
+   Uses iconName strings instead of icon components.
+   ============================================================================= */
 
-import { BookOpen, Scale, RefreshCw, Eye } from "lucide-react";
 import { Navbar, Footer, PageHeader, GlassCard } from "@/components/quoth";
+import type { GlassCardIconName } from "@/components/quoth/GlassCard";
 import { Separator } from "@/components/ui/separator";
 
-const principles = [
+const principles: Array<{
+  iconName: GlassCardIconName;
+  title: string;
+  description: string;
+  quote: string;
+}> = [
   {
-    icon: BookOpen,
+    iconName: "book-open",
     title: "Documentation as Law",
     description:
       "In the Quoth paradigm, documentation isn't a suggestion—it's legislation. Every pattern file in your knowledge base becomes a binding contract that AI agents must respect and enforce.",
@@ -14,7 +23,7 @@ const principles = [
       "If it's not documented, it doesn't exist. If it is documented, it must be obeyed.",
   },
   {
-    icon: Scale,
+    iconName: "scale",
     title: "No More Hallucinations",
     description:
       "AI models hallucinate when they lack authoritative sources. Quoth provides that authority—a curated, versioned knowledge base that serves as the single source of truth for your codebase.",
@@ -22,7 +31,7 @@ const principles = [
       "We don't guess. We don't assume. We read, contrast, and verify.",
   },
   {
-    icon: RefreshCw,
+    iconName: "refresh-cw",
     title: "The Read-Contrast-Update Loop",
     description:
       "Documentation dies the moment it's written—unless there's a system to keep it alive. Quoth enforces a continuous loop: read the docs, contrast with reality, propose updates when drift is detected.",
@@ -30,7 +39,7 @@ const principles = [
       "Stale documentation is worse than no documentation. We keep it breathing.",
   },
   {
-    icon: Eye,
+    iconName: "eye",
     title: "Transparent Reasoning",
     description:
       "Every suggestion Quoth makes comes with a citation. You'll always know which document, which pattern, which rule led to a specific recommendation. No black boxes.",
@@ -64,7 +73,7 @@ export default function ManifestoPage() {
             {principles.map((principle, index) => (
               <div key={index} className="animate-fade-in" style={{ animationDelay: `${index * 0.1}s` }}>
                 <GlassCard
-                  icon={principle.icon}
+                  iconName={principle.iconName}
                   title={principle.title}
                   description={principle.description}
                   hover={false}

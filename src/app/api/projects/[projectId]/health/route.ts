@@ -11,13 +11,17 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ projectId: string }> }
 ) {
-  const { projectId } = await params;
+  // Start params resolution and auth client creation in parallel
+  const [{ projectId }, supabase] = await Promise.all([
+    params,
+    createServerSupabaseClient(),
+  ]);
+
   const { searchParams } = new URL(request.url);
   const needingAttentionOnly = searchParams.get('needingAttention') === 'true';
   const limit = parseInt(searchParams.get('limit') || '10', 10);
 
   // Verify authentication
-  const supabase = await createServerSupabaseClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
