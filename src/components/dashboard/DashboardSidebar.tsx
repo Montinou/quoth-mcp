@@ -72,7 +72,7 @@ const mainNavItems = [
   },
   {
     title: "Coverage",
-    href: "/coverage",
+    href: "/dashboard#coverage",
     icon: PieChart,
     description: "Doc coverage metrics",
   },
@@ -129,9 +129,10 @@ export function DashboardSidebar() {
                 className="transition-all duration-300 hover:bg-violet-spectral/10"
               >
                 <Link href="/dashboard" className="group">
-                  <div className="flex items-center gap-2">
-                    <Logo size="sm" />
-                  </div>
+                  <Logo size="sm" showText={false} />
+                  <span className="font-medium italic tracking-wide text-white transition-colors duration-300 group-hover:text-violet-ghost text-xl" style={{ fontFamily: "var(--font-cormorant), serif" }}>
+                    Quoth
+                  </span>
                 </Link>
               </SidebarMenuButton>
             </SidebarMenuItem>

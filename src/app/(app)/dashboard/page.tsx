@@ -206,7 +206,7 @@ export default async function DashboardPage() {
 
         {/* Coverage Card - wrapped in Suspense for progressive loading */}
         {firstProject && (
-          <div className="mb-10 animate-stagger stagger-5">
+          <div id="coverage" className="mb-10 animate-stagger stagger-5 scroll-mt-24">
             <Suspense fallback={<CardSkeleton />}>
               <CoverageCard projectId={firstProject.id} initialCoverage={initialCoverage} />
             </Suspense>
