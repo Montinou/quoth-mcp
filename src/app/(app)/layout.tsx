@@ -20,7 +20,7 @@ export default async function AppLayout({
   return (
     <SidebarProvider defaultOpen={defaultOpen}>
       <DashboardSidebar />
-      <SidebarInset className="transition-all duration-300 ease-out md:pl-64">
+      <SidebarInset className="transition-[width] duration-300 ease-out">
         {/* Mobile header with sidebar trigger */}
         <header className="sticky top-0 z-40 flex h-14 items-center gap-4 border-b border-sidebar-border/50 bg-sidebar/80 backdrop-blur-xl px-4 md:hidden">
           <SidebarTrigger className="-ml-1 transition-transform duration-200 hover:scale-110 active:scale-95" />

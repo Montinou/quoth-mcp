@@ -73,6 +73,7 @@ interface AuthContextType {
   loading: boolean;
   profileLoading: boolean;
   profileError: string | null;
+  isHydrated: boolean; // True after client-side hydration completes
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signUp: (email: string, password: string, username: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
@@ -82,13 +83,14 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  // Initialize from cache to avoid flicker on navigation
-  // Use lazy initialization to avoid unnecessary localStorage reads on every render
+  // Initialize with null to match server-side rendering (prevents hydration mismatch)
+  // Cached profile is restored after hydration in useEffect
   const [user, setUser] = useState<User | null>(null);
-  const [profile, setProfile] = useState<Profile | null>(() => getCachedProfile());
+  const [profile, setProfile] = useState<Profile | null>(null);
   const [session, setSession] = useState<Session | null>(null);
-  // If we have a cached profile, don't show loading state (profile will show instantly)
-  const [loading, setLoading] = useState(() => !getCachedProfile());
+  // Start with loading=true to match server, update after hydration
+  const [loading, setLoading] = useState(true);
+  const [isHydrated, setIsHydrated] = useState(false);
   const [profileLoading, setProfileLoading] = useState(false);
   const [profileError, setProfileError] = useState<string | null>(null);
   const [supabase] = useState(() => createClient());
@@ -97,8 +99,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // Refs to access current state without triggering re-renders
   const userRef = useRef<User | null>(null);
-  // Also initialize profileRef from cache
-  const profileRef = useRef<Profile | null>(getCachedProfile());
+  // Initialize profileRef as null to match initial state (prevents hydration mismatch)
+  const profileRef = useRef<Profile | null>(null);
   const profileLoadingRef = useRef(false);
   const profileErrorRef = useRef<string | null>(null);
   const profileRetryCountRef = useRef(0);
@@ -223,6 +225,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       isRevalidatingRef.current = false;
     }
   }, [supabase]); // ✅ ONLY depends on supabase (stable)
+
+  // Hydration effect: restore cached profile AFTER hydration to prevent mismatch
+  // This runs only on the client, after the initial render matches the server
+  useEffect(() => {
+    setIsHydrated(true);
+
+    // Restore cached profile from localStorage after hydration
+    const cachedProfile = getCachedProfile();
+    if (cachedProfile) {
+      setProfile(cachedProfile);
+      profileRef.current = cachedProfile;
+      // If we have a cached profile, we can skip the loading state
+      // (auth init will still run but UI won't flicker)
+    }
+  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -568,6 +585,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     loading,
     profileLoading,
     profileError,
+    isHydrated,
     signIn,
     signUp,
     signOut,

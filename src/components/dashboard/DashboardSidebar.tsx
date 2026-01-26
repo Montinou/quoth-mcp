@@ -35,6 +35,7 @@ import {
   SidebarMenuItem,
   SidebarRail,
   SidebarTrigger,
+  useSidebar,
 } from "@/components/ui/sidebar";
 import {
   DropdownMenu,
@@ -94,10 +95,13 @@ const settingsNavItems = [
   },
 ];
 
-export function DashboardSidebar() {
+// Inner component that uses useSidebar hook (must be inside Sidebar context)
+function SidebarInner() {
   const pathname = usePathname();
   const router = useRouter();
-  const { user, profile, signOut } = useAuth();
+  const { user, profile, signOut, isHydrated } = useAuth();
+  const { state } = useSidebar();
+  const isCollapsed = state === "collapsed";
 
   const handleSignOut = async () => {
     await signOut();
@@ -112,33 +116,49 @@ export function DashboardSidebar() {
     return pathname.startsWith(href);
   };
 
-  // Get display name for user
-  const displayName = profile?.username || user?.email?.split("@")[0] || "User";
+  // Get display name for user - use consistent fallback during SSR/hydration
+  // This prevents hydration mismatch when localStorage has cached profile
+  const displayName = isHydrated
+    ? (profile?.username || user?.email?.split("@")[0] || "User")
+    : "User";
   const userInitial = displayName[0]?.toUpperCase() || "U";
 
   return (
-    <Sidebar collapsible="icon" className="border-r border-graphite/50 bg-sidebar">
+    <>
       {/* Header with Logo */}
       <SidebarHeader className="border-b border-sidebar-border/50 pb-4">
-        <div className="flex items-center justify-between">
-          <SidebarMenu>
-            <SidebarMenuItem>
-              <SidebarMenuButton
-                size="lg"
-                asChild
-                className="transition-all duration-300 hover:bg-violet-spectral/10"
-              >
-                <Link href="/dashboard" className="group">
-                  <Logo size="sm" showText={false} />
-                  <span className="font-medium italic tracking-wide text-white transition-colors duration-300 group-hover:text-violet-ghost text-xl" style={{ fontFamily: "var(--font-cormorant), serif" }}>
+        <SidebarMenu>
+          {/* Trigger - always on top, centered when collapsed */}
+          <SidebarMenuItem>
+            <SidebarTrigger
+              className={`
+                flex justify-center transition-all duration-300
+                hover:bg-violet-spectral/10 hover:text-violet-spectral h-10
+                ${isCollapsed ? "w-full" : "w-auto ml-auto"}
+              `}
+            />
+          </SidebarMenuItem>
+          {/* Logo - below trigger */}
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              size="lg"
+              asChild
+              className="transition-all duration-300 hover:bg-violet-spectral/10"
+            >
+              <Link href="/dashboard" className={`group/logo ${isCollapsed ? "!justify-center" : ""}`}>
+                <Logo size="sm" showText={false} />
+                {!isCollapsed && (
+                  <span
+                    className="font-medium italic tracking-wide text-white text-xl transition-colors duration-300 group-hover/logo:text-violet-ghost"
+                    style={{ fontFamily: "var(--font-cormorant), serif" }}
+                  >
                     Quoth
                   </span>
-                </Link>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-          </SidebarMenu>
-          <SidebarTrigger className="hidden md:flex transition-transform duration-200 hover:scale-110 hover:text-violet-spectral" />
-        </div>
+                )}
+              </Link>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
       </SidebarHeader>
 
       <SidebarContent className="py-2">
@@ -162,7 +182,7 @@ export function DashboardSidebar() {
                       ${isActive(item.href) ? "nav-active-indicator" : ""}
                     `}
                   >
-                    <Link href={item.href}>
+                    <Link href={item.href} className={isCollapsed ? "!justify-center" : ""}>
                       <item.icon
                         className={`size-4 transition-all duration-300 group-hover/item:scale-110 ${
                           isActive(item.href)
@@ -170,17 +190,19 @@ export function DashboardSidebar() {
                             : "text-gray-400 group-hover/item:text-violet-ghost"
                         }`}
                       />
-                      <span
-                        className={`transition-colors duration-300 ${
-                          isActive(item.href)
-                            ? "text-white font-medium"
-                            : "text-gray-400 group-hover/item:text-white"
-                        }`}
-                      >
-                        {item.title}
-                      </span>
-                      {isActive(item.href) && (
-                        <Sparkles className="size-3 text-violet-spectral ml-auto opacity-0 group-data-[state=expanded]:opacity-100 transition-opacity duration-300" />
+                      {!isCollapsed && (
+                        <>
+                          <span
+                            className={`transition-colors duration-300 ${
+                              isActive(item.href) ? "text-white font-medium" : "text-gray-400 group-hover/item:text-white"
+                            }`}
+                          >
+                            {item.title}
+                          </span>
+                          {isActive(item.href) && (
+                            <Sparkles className="size-3 text-violet-spectral ml-auto" />
+                          )}
+                        </>
                       )}
                     </Link>
                   </SidebarMenuButton>
@@ -210,9 +232,7 @@ export function DashboardSidebar() {
                       ${pathname.includes("/team") ? "nav-active-indicator" : ""}
                     `}
                   >
-                    <Link
-                      href={`/dashboard/${profile.username}-knowledge-base/team`}
-                    >
+                    <Link href={`/dashboard/${profile.username}-knowledge-base/team`} className={isCollapsed ? "!justify-center" : ""}>
                       <Users
                         className={`size-4 transition-all duration-300 group-hover/item:scale-110 ${
                           pathname.includes("/team")
@@ -220,15 +240,15 @@ export function DashboardSidebar() {
                             : "text-gray-400 group-hover/item:text-violet-ghost"
                         }`}
                       />
-                      <span
-                        className={`transition-colors duration-300 ${
-                          pathname.includes("/team")
-                            ? "text-white font-medium"
-                            : "text-gray-400 group-hover/item:text-white"
-                        }`}
-                      >
-                        Team
-                      </span>
+                      {!isCollapsed && (
+                        <span
+                          className={`transition-colors duration-300 ${
+                            pathname.includes("/team") ? "text-white font-medium" : "text-gray-400 group-hover/item:text-white"
+                          }`}
+                        >
+                          Team
+                        </span>
+                      )}
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
@@ -257,7 +277,7 @@ export function DashboardSidebar() {
                       ${isActive(item.href) ? "nav-active-indicator" : ""}
                     `}
                   >
-                    <Link href={item.href}>
+                    <Link href={item.href} className={isCollapsed ? "!justify-center" : ""}>
                       <item.icon
                         className={`size-4 transition-all duration-300 group-hover/item:scale-110 ${
                           isActive(item.href)
@@ -265,15 +285,15 @@ export function DashboardSidebar() {
                             : "text-gray-400 group-hover/item:text-violet-ghost"
                         }`}
                       />
-                      <span
-                        className={`transition-colors duration-300 ${
-                          isActive(item.href)
-                            ? "text-white font-medium"
-                            : "text-gray-400 group-hover/item:text-white"
-                        }`}
-                      >
-                        {item.title}
-                      </span>
+                      {!isCollapsed && (
+                        <span
+                          className={`transition-colors duration-300 ${
+                            isActive(item.href) ? "text-white font-medium" : "text-gray-400 group-hover/item:text-white"
+                          }`}
+                        >
+                          {item.title}
+                        </span>
+                      )}
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
@@ -291,29 +311,35 @@ export function DashboardSidebar() {
               <DropdownMenuTrigger asChild>
                 <SidebarMenuButton
                   size="lg"
-                  className="group/user data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground transition-all duration-300 hover:bg-violet-spectral/10"
+                  className={`
+                    group/user data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground
+                    transition-all duration-300 hover:bg-violet-spectral/10
+                    ${isCollapsed ? "!justify-center !gap-0" : ""}
+                  `}
                 >
-                  <div className="flex items-center gap-3">
-                    {/* Avatar with gradient ring */}
-                    <div className="relative">
-                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-violet-spectral/30 to-violet-glow/30 flex items-center justify-center border border-violet-spectral/40 shrink-0 transition-all duration-300 group-hover/user:border-violet-spectral/60 group-hover/user:shadow-lg group-hover/user:shadow-violet-spectral/20">
-                        <span className="text-violet-ghost font-semibold text-sm">
-                          {userInitial}
+                  {/* Avatar with gradient ring */}
+                  <div className="relative shrink-0">
+                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-violet-spectral/30 to-violet-glow/30 flex items-center justify-center border border-violet-spectral/40 transition-all duration-300 group-hover/user:border-violet-spectral/60 group-hover/user:shadow-lg group-hover/user:shadow-violet-spectral/20">
+                      <span className="text-violet-ghost font-semibold text-sm">
+                        {userInitial}
+                      </span>
+                    </div>
+                    {/* Online indicator */}
+                    <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-emerald-muted rounded-full border-2 border-sidebar" />
+                  </div>
+                  {!isCollapsed && (
+                    <>
+                      <div className="flex flex-col text-left text-sm leading-tight">
+                        <span className="truncate font-semibold text-white">
+                          {displayName}
+                        </span>
+                        <span className="truncate text-xs text-gray-500">
+                          {user?.email}
                         </span>
                       </div>
-                      {/* Online indicator */}
-                      <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-emerald-muted rounded-full border-2 border-sidebar" />
-                    </div>
-                    <div className="flex flex-col text-left text-sm leading-tight">
-                      <span className="truncate font-semibold text-white">
-                        {displayName}
-                      </span>
-                      <span className="truncate text-xs text-gray-500">
-                        {user?.email}
-                      </span>
-                    </div>
-                  </div>
-                  <ChevronUp className="ml-auto size-4 text-gray-500 transition-transform duration-200 group-data-[state=open]/user:rotate-180" />
+                      <ChevronUp className="ml-auto size-4 text-gray-500 transition-transform duration-200 group-data-[state=open]/user:rotate-180" />
+                    </>
+                  )}
                 </SidebarMenuButton>
               </DropdownMenuTrigger>
               <DropdownMenuContent
@@ -361,6 +387,15 @@ export function DashboardSidebar() {
       </SidebarFooter>
 
       <SidebarRail className="hover:bg-violet-spectral/10 transition-colors duration-300" />
+    </>
+  );
+}
+
+// Main export - wraps inner component with Sidebar context
+export function DashboardSidebar() {
+  return (
+    <Sidebar collapsible="icon" className="border-r border-graphite/50 bg-sidebar">
+      <SidebarInner />
     </Sidebar>
   );
 }
