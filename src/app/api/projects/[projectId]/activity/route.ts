@@ -7,6 +7,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { getActivitySummary } from '@/lib/quoth/activity';
 
+// Force Edge runtime for consistent behavior (serverless has issues in Next.js 16)
+export const runtime = 'edge';
+
 interface RouteParams {
   params: Promise<{ projectId: string }>;
 }

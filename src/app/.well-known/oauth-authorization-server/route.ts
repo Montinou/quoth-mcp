@@ -9,6 +9,9 @@
 
 import { NextResponse } from 'next/server';
 
+// Force Edge runtime for consistent behavior (serverless has issues in Next.js 16)
+export const runtime = 'edge';
+
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://quoth.ai-innovation.site';
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 
@@ -21,35 +24,43 @@ const corsHeaders = {
 };
 
 export async function GET() {
-  // Use Supabase as the OAuth server if configured
-  const useSupabaseOAuth = SUPABASE_URL && process.env.USE_SUPABASE_OAUTH === 'true';
+  try {
+    // Use Supabase as the OAuth server if configured
+    const useSupabaseOAuth = SUPABASE_URL && process.env.USE_SUPABASE_OAUTH === 'true';
 
-  // When using Supabase OAuth, we use proxy endpoints that add the apikey header
-  // This is required because Supabase endpoints need the apikey for project identification
-  const metadata = {
-    issuer: APP_URL,
-    authorization_endpoint: `${APP_URL}/api/oauth/authorize`,
-    token_endpoint: `${APP_URL}/api/oauth/token`,
-    registration_endpoint: `${APP_URL}/api/oauth/register`,
+    // When using Supabase OAuth, we use proxy endpoints that add the apikey header
+    // This is required because Supabase endpoints need the apikey for project identification
+    const metadata = {
+      issuer: APP_URL,
+      authorization_endpoint: `${APP_URL}/api/oauth/authorize`,
+      token_endpoint: `${APP_URL}/api/oauth/token`,
+      registration_endpoint: `${APP_URL}/api/oauth/register`,
 
-    // Supported features
-    response_types_supported: ['code'],
-    grant_types_supported: ['authorization_code', 'refresh_token'],
-    token_endpoint_auth_methods_supported: ['none'],
-    code_challenge_methods_supported: ['S256'],
+      // Supported features
+      response_types_supported: ['code'],
+      grant_types_supported: ['authorization_code', 'refresh_token'],
+      token_endpoint_auth_methods_supported: ['none'],
+      code_challenge_methods_supported: ['S256'],
 
-    // Scopes - use OpenID for Supabase OAuth, MCP scopes for legacy
-    scopes_supported: useSupabaseOAuth
-      ? ['openid', 'email', 'profile']
-      : ['mcp:read', 'mcp:write', 'mcp:admin'],
+      // Scopes - use OpenID for Supabase OAuth, MCP scopes for legacy
+      scopes_supported: useSupabaseOAuth
+        ? ['openid', 'email', 'profile']
+        : ['mcp:read', 'mcp:write', 'mcp:admin'],
 
-    // Service documentation
-    service_documentation: `${APP_URL}/guide`,
-  };
+      // Service documentation
+      service_documentation: `${APP_URL}/guide`,
+    };
 
-  return NextResponse.json(metadata, {
-    headers: corsHeaders,
-  });
+    return NextResponse.json(metadata, {
+      headers: corsHeaders,
+    });
+  } catch (error) {
+    console.error('[OAuth Metadata] Error:', error);
+    return NextResponse.json(
+      { error: 'Failed to generate OAuth metadata' },
+      { status: 500, headers: corsHeaders }
+    );
+  }
 }
 
 export async function OPTIONS() {
