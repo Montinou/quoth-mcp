@@ -226,15 +226,13 @@ export function UsageAnalytics() {
                   {stats.topSearches.map((search, index) => (
                     <div
                       key={search.query}
-                      className="flex items-center justify-between py-3 px-4 bg-charcoal/50 rounded-lg border border-graphite hover:border-violet-spectral/30 transition-colors"
+                      className="flex items-center gap-4 py-3 px-4 bg-charcoal/50 rounded-lg border border-graphite hover:border-violet-spectral/30 transition-colors"
                     >
-                      <div className="flex items-center gap-3">
-                        <span className="text-sm text-violet-ghost font-medium w-6">
-                          #{index + 1}
-                        </span>
-                        <span className="text-gray-400 truncate max-w-md">{search.query}</span>
-                      </div>
-                      <span className="text-white font-medium bg-violet-spectral/20 px-3 py-1 rounded-full text-sm">
+                      <span className="text-sm text-violet-ghost font-medium shrink-0">
+                        #{index + 1}
+                      </span>
+                      <span className="text-gray-400 truncate flex-1 min-w-0">{search.query}</span>
+                      <span className="text-white font-medium bg-violet-spectral/20 px-3 py-1 rounded-full text-sm shrink-0">
                         {search.count}
                       </span>
                     </div>

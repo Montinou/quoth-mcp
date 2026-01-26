@@ -124,12 +124,12 @@ export function ActivityCard({ projectId }: ActivityCardProps) {
                 {activity.topSearchTerms.slice(0, 5).map((term, index) => (
                   <div
                     key={index}
-                    className="flex items-center justify-between text-sm"
+                    className="flex items-center gap-3 text-sm"
                   >
-                    <span className="text-gray-300 truncate max-w-[200px]">
+                    <span className="text-gray-300 truncate flex-1 min-w-0">
                       {term.query}
                     </span>
-                    <span className="text-gray-500">{term.count}x</span>
+                    <span className="text-gray-500 shrink-0">{term.count}x</span>
                   </div>
                 ))}
               </div>
