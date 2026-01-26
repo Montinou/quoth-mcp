@@ -1,7 +1,7 @@
 {
   "name": "quoth",
-  "version": "1.0.5",
-  "description": "Lightweight documentation-as-truth plugin. ~60 tokens overhead with gentle hints that guide Claude to use quoth_guidelines when relevant.",
+  "version": "1.0.6",
+  "description": "Smart documentation-as-truth plugin. Category-aware hints (once per file type), intent detection, and conditional badge. ~80 tokens max overhead.",
   "author": {
     "name": "Montinou",
     "url": "https://github.com/Montinou"

@@ -12,8 +12,8 @@ main() {
         exit 0
     fi
 
-    # Subagents often write code autonomously - strong hint
-    local context="SUBAGENT: Before writing code, use \`quoth_guidelines('code')\` and \`quoth_search_index\` to follow documented patterns."
+    # Clear hint with exact signatures for subagents
+    local context='[Quoth-Subagent] Call quoth_guidelines({ mode: "code" }) first. Then quoth_search_index. Never invent patterns.'
 
     output_context "$context"
 }

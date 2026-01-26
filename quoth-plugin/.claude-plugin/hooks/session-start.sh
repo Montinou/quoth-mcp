@@ -23,8 +23,8 @@ main() {
     # Initialize session state
     init_session "$project_id"
 
-    # Lightweight hint - strongly suggest, not force
-    local context="Quoth MCP active. Strongly recommend \`quoth_guidelines('code')\` and \`quoth_search_index\` before writing code."
+    # Clear hint with exact function signatures
+    local context="[Quoth] BEFORE writing code: quoth_guidelines({ mode: \"code\" }) then quoth_search_index({ query: \"relevant terms\" }). Docs override assumptions."
 
     output_context "$context"
 }

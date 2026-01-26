@@ -61,7 +61,7 @@ get_session_file() {
     echo "$QUOTH_SESSION_DIR/session_$session_id.json"
 }
 
-# Initialize session state
+# Initialize session state with new schema
 # Usage: init_session "$PROJECT_ID"
 init_session() {
     local project_id="$1"
@@ -70,13 +70,22 @@ init_session() {
 {
   "project_id": "$project_id",
   "started_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
-  "patterns_applied": 0,
-  "patterns_list": [],
-  "drift_detected": 0,
-  "drift_list": [],
-  "undocumented": 0,
-  "undocumented_list": [],
-  "files_modified": []
+  "hints_delivered": {
+    "session_start": true,
+    "pre_edit_test": false,
+    "pre_edit_api": false,
+    "pre_edit_component": false,
+    "pre_edit_service": false,
+    "pre_edit_generic": false
+  },
+  "quoth_tools_used": {
+    "guidelines": 0,
+    "search_index": 0,
+    "read_doc": 0,
+    "read_chunks": 0,
+    "propose_update": 0
+  },
+  "detected_intent": null
 }
 EOF
 }
@@ -127,6 +136,84 @@ get_session_counter() {
 cleanup_session() {
     local session_file=$(get_session_file)
     rm -f "$session_file"
+}
+
+# ============================================================================
+# HINT TRACKING HELPERS
+# ============================================================================
+
+# Check if hint was already delivered for a category
+# Usage: hint_delivered_for "pre_edit_test"
+# Returns: 0 if delivered, 1 if not
+hint_delivered_for() {
+    local category="$1"
+    local session_file=$(get_session_file)
+    if [ -f "$session_file" ]; then
+        # Check if hints_delivered.$category is true
+        if grep -q "\"$category\"[[:space:]]*:[[:space:]]*true" "$session_file" 2>/dev/null; then
+            return 0
+        fi
+    fi
+    return 1
+}
+
+# Mark hint as delivered for a category
+# Usage: mark_hint_delivered "pre_edit_test"
+mark_hint_delivered() {
+    local category="$1"
+    local session_file=$(get_session_file)
+    if [ -f "$session_file" ]; then
+        # Replace false with true for this category
+        if [[ "$OSTYPE" == "darwin"* ]]; then
+            sed -i '' "s/\"$category\"[[:space:]]*:[[:space:]]*false/\"$category\": true/" "$session_file"
+        else
+            sed -i "s/\"$category\"[[:space:]]*:[[:space:]]*false/\"$category\": true/" "$session_file"
+        fi
+    fi
+}
+
+# Check if any Quoth tools were used in this session
+# Returns: 0 if any tool counter > 0, 1 if all are 0
+quoth_tools_were_used() {
+    local session_file=$(get_session_file)
+    if [ -f "$session_file" ]; then
+        # Check if any quoth_tools_used counter is > 0
+        local tools_section=$(grep -A 6 '"quoth_tools_used"' "$session_file" 2>/dev/null || echo "")
+        if echo "$tools_section" | grep -qE ':[[:space:]]*[1-9]'; then
+            return 0
+        fi
+    fi
+    return 1
+}
+
+# Increment a Quoth tool usage counter
+# Usage: increment_tool_counter "search_index"
+increment_tool_counter() {
+    local tool_name="$1"
+    local session_file=$(get_session_file)
+    if [ -f "$session_file" ]; then
+        local current=$(grep -o "\"$tool_name\"[[:space:]]*:[[:space:]]*[0-9]*" "$session_file" | grep -o '[0-9]*' | head -1 || echo "0")
+        local new=$((current + 1))
+        if [[ "$OSTYPE" == "darwin"* ]]; then
+            sed -i '' "s/\"$tool_name\"[[:space:]]*:[[:space:]]*[0-9]*/\"$tool_name\": $new/" "$session_file"
+        else
+            sed -i "s/\"$tool_name\"[[:space:]]*:[[:space:]]*[0-9]*/\"$tool_name\": $new/" "$session_file"
+        fi
+    fi
+}
+
+# Update detected user intent
+# Usage: update_session_intent "testing"
+update_session_intent() {
+    local intent="$1"
+    local session_file=$(get_session_file)
+    if [ -f "$session_file" ]; then
+        if [[ "$OSTYPE" == "darwin"* ]]; then
+            sed -i '' "s/\"detected_intent\"[[:space:]]*:[[:space:]]*[^,}]*/\"detected_intent\": \"$intent\"/" "$session_file"
+        else
+            sed -i "s/\"detected_intent\"[[:space:]]*:[[:space:]]*[^,}]*/\"detected_intent\": \"$intent\"/" "$session_file"
+        fi
+    fi
 }
 
 # ============================================================================
