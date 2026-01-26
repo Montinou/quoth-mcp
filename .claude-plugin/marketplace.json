@@ -13,7 +13,7 @@
       "name": "quoth",
       "source": "./quoth-plugin",
       "description": "Lightweight documentation-as-truth plugin. ~60 tokens overhead with gentle hints that guide Claude to use quoth_guidelines when relevant.",
-      "version": "1.0.0",
+      "version": "1.0.4",
       "author": {
         "name": "Montinou"
       },
