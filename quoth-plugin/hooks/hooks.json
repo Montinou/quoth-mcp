@@ -1,8 +1,8 @@
 {
+  "description": "Quoth documentation-as-truth hooks for code quality guidance",
   "hooks": {
     "SessionStart": [
       {
-        "matcher": "startup|resume|clear|compact",
         "hooks": [
           {
             "type": "command",
@@ -24,7 +24,6 @@
     ],
     "Stop": [
       {
-        "matcher": ".*",
         "hooks": [
           {
             "type": "command",
