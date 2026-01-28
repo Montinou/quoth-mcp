@@ -24,8 +24,11 @@ init_quoth_local_folder() {
     for type in "${default_types[@]}"; do
         local file="$QUOTH_LOCAL_DIR/${type}.md"
         if [ ! -f "$file" ]; then
+            # Capitalize first letter (compatible with bash 3.x on macOS)
+            local capitalized
+            capitalized="$(echo "$type" | awk '{print toupper(substr($0,1,1)) tolower(substr($0,2))}')"
             cat > "$file" << EOF
-# ${type^}
+# $capitalized
 
 <!--
   This file accumulates ${type} across sessions.
