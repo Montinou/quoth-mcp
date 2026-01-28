@@ -10,7 +10,7 @@
 
 import { Sparkles } from "lucide-react";
 import Link from "next/link";
-import { Navbar, Footer, GlassCard } from "@/components/quoth";
+import { Navbar, Footer, GlassCard, FlowchartShowcase } from "@/components/quoth";
 import { Button } from "@/components/ui/button";
 import { CodeDemo } from "@/components/quoth/CodeDemo";
 
@@ -69,9 +69,12 @@ const Hero = () => (
           animationDelay: "0.1s",
         }}
       >
-        AI Memory.
+        Nevermore Forget.
         <br />
-        <span className="text-gradient-animate">Not Just Search.</span>
+        <span className="text-gradient-animate font-serif" style={{ fontFamily: "var(--font-cinzel), serif" }}>
+          Quoth
+        </span>{" "}
+        <span className="text-white">The Memories.</span>
       </h1>
 
       {/* Subtitle */}
@@ -79,9 +82,9 @@ const Hero = () => (
         className="animate-fade-in-scale font-light text-base sm:text-lg md:text-xl text-gray-400 max-w-2xl mx-auto mb-12 leading-relaxed"
         style={{ animationDelay: "0.3s" }}
       >
-        Give Claude persistent memory that learns as you work.
+        Knowledge that outlives the session.
         <span className="block mt-2 text-gray-500">
-          Local-first storage. Bidirectional knowledge. Session logging.
+          Wisdom that grows with every conversation.
         </span>
       </p>
 
@@ -293,10 +296,10 @@ const Features = () => (
           className="animate-fade-in-scale font-serif text-2xl sm:text-3xl md:text-4xl text-white mb-4"
           style={{ fontFamily: "var(--font-cinzel), serif" }}
         >
-          The Digital Scriptorium
+          The Memory Architecture
         </h2>
         <p className="animate-fade-in-scale text-gray-500 font-light text-sm sm:text-base" style={{ animationDelay: "0.1s" }}>
-          Architecture as Code. Documentation as Law.
+          Knowledge as Code. Context as Law.
         </p>
       </div>
 
@@ -369,10 +372,10 @@ const CallToAction = () => (
         className="animate-fade-in-scale font-serif text-2xl sm:text-3xl md:text-4xl text-white mb-6"
         style={{ fontFamily: "var(--font-cinzel), serif" }}
       >
-        Ready to give Claude real memory?
+        Ready to Never Forget?
       </h2>
       <p className="animate-fade-in-scale text-gray-400 mb-10 text-sm sm:text-base" style={{ animationDelay: "0.1s" }}>
-        Transform from session amnesia to persistent knowledge. Start capturing learnings today.
+        Knowledge that persists. Patterns that compound.
       </p>
       <div
         className="animate-fade-in-scale flex flex-col sm:flex-row items-center justify-center gap-4"
@@ -412,6 +415,7 @@ export default function Home() {
       <Navbar />
       <main>
         <Hero />
+        <FlowchartShowcase />
         <GenesisDemo />
         <Features />
         <Stats />
