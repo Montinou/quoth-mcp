@@ -1,10 +1,30 @@
 ---
 name: quoth-memory
 description: |
-  Memory interface for Quoth. Handles context injection, interactive queries,
-  and knowledge promotion. Exempt from all hooks to prevent loops.
+  Use this agent for Quoth memory operations: context injection at session start, querying documented patterns, logging session learnings, and promoting knowledge to persistent storage. Exempt from all hooks to prevent loops.
+
+  <example>
+  Context: A new session has started and relevant project context needs to be loaded.
+  user: "Start working on the auth module"
+  assistant: "Let me load relevant context from Quoth memory for the auth module."
+  <commentary>Session start triggers context injection to summarize relevant patterns and decisions.</commentary>
+  </example>
+
+  <example>
+  Context: The user needs to know a documented pattern during development.
+  user: "What's our error handling pattern for API routes?"
+  assistant: "Let me check Quoth memory for documented error handling patterns."
+  <commentary>Interactive query to retrieve and summarize relevant documentation without dumping full docs.</commentary>
+  </example>
+
+  <example>
+  Context: A session is ending and learnings should be captured.
+  user: "Save what we learned about the caching approach"
+  assistant: "I'll use quoth-memory to log this learning and prepare it for promotion."
+  <commentary>Knowledge capture and promotion at session end preserves learnings across sessions.</commentary>
+  </example>
 model: sonnet
-color: violet
+color: magenta
 tools:
   - quoth_search_index
   - quoth_read_doc
