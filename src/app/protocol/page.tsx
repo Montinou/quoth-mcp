@@ -1,6 +1,6 @@
 "use client";
 
-import { Search, FileText, GitPullRequest, Bot, ShieldCheck } from "lucide-react";
+import { Search, FileText, GitPullRequest, Bot, ShieldCheck, BookOpen } from "lucide-react";
 import { Navbar, Footer, PageHeader, GlassCard } from "@/components/quoth";
 import {
   CodeBlock,
@@ -58,6 +58,62 @@ const tools = [
 }`,
     returns: "Proposal ID for tracking",
   },
+  {
+    name: "quoth_guidelines",
+    description:
+      "Returns context-relevant guidelines based on the current task.",
+    params: [
+      { name: "context", type: "string", desc: "Description of the current task" },
+    ],
+    example: `{
+  "context": "writing a React component with form validation"
+}`,
+    returns: "Adaptive guidelines relevant to the task context",
+  },
+  {
+    name: "quoth_list_templates",
+    description:
+      "Lists available document templates for genesis and manual creation.",
+    params: [],
+    example: `{}`,
+    returns: "Array of template names with descriptions",
+  },
+  {
+    name: "quoth_get_template",
+    description:
+      "Fetches a specific template structure for document creation.",
+    params: [
+      { name: "template_name", type: "string", desc: "Name of the template to fetch" },
+    ],
+    example: `{
+  "template_name": "testing-pattern"
+}`,
+    returns: "Template content with YAML frontmatter schema",
+  },
+  {
+    name: "quoth_read_chunks",
+    description:
+      "Fetches specific document chunks by ID for granular retrieval.",
+    params: [
+      { name: "chunk_ids", type: "string[]", desc: "Array of chunk IDs to fetch" },
+    ],
+    example: `{
+  "chunk_ids": ["chunk_abc123", "chunk_def456"]
+}`,
+    returns: "Array of chunk contents with metadata",
+  },
+  {
+    name: "quoth_genesis",
+    description:
+      "Genesis v2.0: phased documentation bootstrapping with configurable depth.",
+    params: [
+      { name: "depth", type: "string", desc: "minimal | standard | comprehensive" },
+    ],
+    example: `{
+  "depth": "standard"
+}`,
+    returns: "Status and list of generated documents",
+  },
 ];
 
 const personas = [
@@ -85,6 +141,19 @@ const personas = [
       "Flags violations with specific document citations",
       "Suggests compliant alternatives",
       "Tracks drift patterns over time",
+    ],
+  },
+  {
+    icon: BookOpen,
+    name: "Quoth Documenter",
+    badge: "Documentation",
+    description:
+      "Used while building to document new code immediately after creation.",
+    behavior: [
+      "Asks about documentation type before writing",
+      "Fetches templates from Quoth knowledge base",
+      "Structures docs with H2 sections and YAML frontmatter",
+      "Proposes updates for existing documentation",
     ],
   },
 ];

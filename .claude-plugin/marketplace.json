@@ -11,9 +11,9 @@
   "plugins": [
     {
       "name": "quoth",
-      "source": "./quoth-plugin",
-      "description": "Lightweight documentation-as-truth plugin. ~60 tokens overhead with gentle hints that guide Claude to use quoth_guidelines when relevant.",
-      "version": "1.0.4",
+      "source": ".",
+      "description": "AI Memory plugin with local-first storage, configurable strictness, and quoth-memory subagent for context summarization. Transforms documentation from 'search and read' to 'automatic memory'.",
+      "version": "2.0.0",
       "author": {
         "name": "Montinou"
       },

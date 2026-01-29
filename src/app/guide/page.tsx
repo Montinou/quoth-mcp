@@ -45,6 +45,16 @@ const features = [
     access: "authenticated",
   },
   {
+    name: "quoth_guidelines",
+    description: "Adaptive context-relevant guidelines",
+    access: "authenticated",
+  },
+  {
+    name: "quoth_genesis",
+    description: "Phased documentation bootstrapping",
+    access: "authenticated",
+  },
+  {
     name: "quoth-memory subagent",
     description: "AI Memory interface for context queries",
     access: "plugin",
@@ -52,6 +62,11 @@ const features = [
   {
     name: "/quoth-init skill",
     description: "Initialize local AI Memory folder",
+    access: "plugin",
+  },
+  {
+    name: "/quoth-genesis skill",
+    description: "Bootstrap documentation from codebase",
     access: "plugin",
   },
 ];

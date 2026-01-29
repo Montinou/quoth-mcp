@@ -24,8 +24,9 @@ interface NavbarProps {
 }
 
 const defaultLinks: NavLink[] = [
+  { href: "/guide", label: "Guide" },
+  { href: "/protocol", label: "Protocol" },
   { href: "/docs", label: "Docs" },
-  { href: "/blog", label: "Blog" },
   { href: "/changelog", label: "Changelog" },
   { href: "/pricing", label: "Pricing" },
 ];
