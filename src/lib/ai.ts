@@ -26,7 +26,7 @@ if (process.env.NODE_ENV === 'development') {
 const genAI = googleApiKey ? new GoogleGenerativeAI(googleApiKey) : null;
 const googleModel = genAI?.getGenerativeModel({ model: "text-embedding-004" });
 
-// Gemini 2.0 Flash for generative responses (RAG answers)
+// Gemini 2.0 Flash for generative responses (RAG answers) — LEGACY, kept as fallback
 const flashModel = genAI?.getGenerativeModel({
   model: "gemini-2.0-flash",  // Stable model (exp was deprecated)
   generationConfig: {
@@ -35,6 +35,10 @@ const flashModel = genAI?.getGenerativeModel({
     maxOutputTokens: 1024,
   }
 });
+
+// Cloudflare Workers AI endpoint (primary RAG answer generator)
+const CF_RAG_WORKER_URL = process.env.CF_RAG_WORKER_URL;
+const CF_RAG_API_KEY = process.env.CF_RAG_API_KEY;
 
 /**
  * Generate embedding using Jina Embeddings v3 (optimized for code)
@@ -248,7 +252,7 @@ ${contextDocs}
 }
 
 /**
- * Generate an AI answer using Gemini 2.0 Flash based on retrieved context.
+ * Generate an AI answer via Cloudflare Workers AI (primary) or Gemini Flash (fallback).
  * Respects tier limits when projectId is provided.
  *
  * @param query - User's question
@@ -275,9 +279,6 @@ export async function generateRAGAnswer(
 
     incrementUsage(projectId, 'rag_answer');
   }
-  if (!flashModel) {
-    throw new Error("Gemini API not configured. Set GEMINIAI_API_KEY or GOOGLE_API_KEY");
-  }
 
   if (contexts.length === 0) {
     return {
@@ -290,32 +291,57 @@ export async function generateRAGAnswer(
     };
   }
 
+  // Primary: Cloudflare Workers AI (Llama 3.2 3B)
+  if (CF_RAG_WORKER_URL && CF_RAG_API_KEY) {
+    try {
+      const cfResponse = await fetch(CF_RAG_WORKER_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${CF_RAG_API_KEY}`,
+        },
+        body: JSON.stringify({ query, contexts: contexts.slice(0, 5) }),
+      });
+
+      if (cfResponse.ok) {
+        const data = await cfResponse.json() as RAGAnswer;
+        console.log('[AI] RAG answer generated via Cloudflare Workers AI (Llama 3.2 3B)');
+        return data;
+      }
+
+      console.warn('[AI] Cloudflare Worker returned', cfResponse.status, '- falling back to Gemini');
+    } catch (error) {
+      console.warn('[AI] Cloudflare Worker failed, falling back to Gemini:', error);
+    }
+  }
+
+  // Fallback: Gemini 2.0 Flash
+  if (!flashModel) {
+    return {
+      answer: "AI answer generation is not configured. Please review the documents below.",
+      sources: contexts.slice(0, 5).map(ctx => ({ title: ctx.title, path: ctx.path })),
+      relatedQuestions: [],
+    };
+  }
+
   const prompt = buildRAGPrompt(query, contexts);
 
   try {
     const result = await flashModel.generateContent(prompt);
     const response = result.response.text();
 
-    // Extract sources from contexts used
     const sources = contexts.slice(0, 5).map(ctx => ({
       title: ctx.title,
       path: ctx.path,
     }));
 
-    // Try to extract related questions from the response
     const relatedQuestions = extractRelatedQuestions(response);
-
-    // Clean the answer (remove the related questions section if we extracted them)
     const cleanedAnswer = cleanAnswer(response);
 
-    return {
-      answer: cleanedAnswer,
-      sources,
-      relatedQuestions,
-    };
+    console.log('[AI] RAG answer generated via Gemini 2.0 Flash (fallback)');
+    return { answer: cleanedAnswer, sources, relatedQuestions };
   } catch (error) {
     console.error("Gemini 2.0 Flash generation failed:", error);
-    // Return fallback response instead of throwing - graceful degradation
     return {
       answer: "Unable to generate AI answer at this time. Please review the documents below.",
       sources: contexts.slice(0, 5).map(ctx => ({ title: ctx.title, path: ctx.path })),
@@ -415,8 +441,8 @@ TL;DR:`;
 }
 
 /**
- * Check if generative AI is available
+ * Check if generative AI is available (Cloudflare Worker or Gemini)
  */
 export function isGenerativeAIConfigured(): boolean {
-  return !!flashModel;
+  return !!(CF_RAG_WORKER_URL && CF_RAG_API_KEY) || !!flashModel;
 }
