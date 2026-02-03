@@ -117,7 +117,7 @@ export default {
 
       const prompt = buildPrompt(body.query, body.contexts);
 
-      const response = await env.AI.run("@cf/meta/llama-3.2-3b-instruct", {
+      const response = await env.AI.run("@cf/mistralai/mistral-small-3.1-24b-instruct", {
         messages: [{ role: "user", content: prompt }],
         max_tokens: 1024,
         temperature: 0.3,
