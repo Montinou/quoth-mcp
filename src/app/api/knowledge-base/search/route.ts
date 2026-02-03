@@ -5,6 +5,7 @@
 
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { searchDocuments } from '@/lib/quoth/search';
+import { logActivity } from '@/lib/quoth/activity';
 
 export async function POST(request: Request) {
   try {
@@ -32,7 +33,25 @@ export async function POST(request: Request) {
       return Response.json({ error: 'Query is required' }, { status: 400 });
     }
 
+    const startTime = Date.now();
     const results = await searchDocuments(query, membership.project_id);
+    const responseTimeMs = Date.now() - startTime;
+
+    // Log search activity with result_count (non-blocking)
+    const avgRelevance = results.length > 0
+      ? results.reduce((sum, r) => sum + (r.relevance || 0), 0) / results.length
+      : 0;
+
+    logActivity({
+      projectId: membership.project_id,
+      userId: user.id,
+      eventType: 'search',
+      query,
+      resultCount: results.length,
+      relevanceScore: avgRelevance,
+      responseTimeMs,
+      toolName: 'web_search_api',
+    });
     
     return Response.json({ results });
   } catch (error) {

@@ -1,9 +1,9 @@
 /**
  * Coverage Calculation Service
- * Shows actual document distribution by type and categorization coverage.
+ * Shows actual document distribution by type and embedding coverage.
  *
- * Coverage = percentage of documents that have a doc_type assigned.
- * Uncategorized documents (doc_type = null) represent gaps.
+ * Coverage = documents with embeddings / total documents.
+ * Also shows breakdown by actual doc_type categories from the database.
  */
 
 import { supabase } from '../supabase';
@@ -11,29 +11,20 @@ import { supabase } from '../supabase';
 /**
  * Document types stored in the database
  */
-export type DocType = 'architecture' | 'testing-pattern' | 'contract' | 'meta' | 'template';
+export type DocType = 'architecture' | 'testing-pattern' | 'contract' | 'meta' | 'template' | 'rules' | 'patterns' | 'reference';
 
 /**
- * Count per document type category
+ * Count per document type category — now dynamic, keyed by actual doc_type values
  */
-interface CategoryCount {
-  count: number;
-}
-
-/**
- * Coverage breakdown by document type
- */
-interface CoverageBreakdown {
-  architecture: CategoryCount;
-  testing_pattern: CategoryCount;
-  contract: CategoryCount;
-  meta: CategoryCount;
-  uncategorized: CategoryCount;
+export interface CoverageBreakdown {
+  [category: string]: { count: number };
 }
 
 export interface CoverageResult {
   projectId: string;
   totalDocuments: number;
+  docsWithEmbeddings: number;
+  totalChunks: number;
   categorizedDocuments: number;
   coveragePercentage: number;
   breakdown: CoverageBreakdown;
@@ -43,60 +34,120 @@ export interface CoverageResult {
 }
 
 /**
+ * Infer a doc_type for a document based on its file path.
+ * Used to auto-categorize documents with NULL doc_type.
+ */
+function inferDocType(filePath: string): string {
+  if (filePath.includes('playwright-rules')) return 'rules';
+  if (filePath.includes('patterns')) return 'patterns';
+  return 'reference';
+}
+
+/**
+ * Auto-categorize documents with NULL doc_type based on their file path.
+ * Updates the database in-place so future queries return correct types.
+ */
+async function autoCategorizeNullDocTypes(projectId: string): Promise<number> {
+  // Fetch docs with NULL doc_type
+  const { data: nullDocs, error } = await supabase
+    .from('documents')
+    .select('id, file_path, title')
+    .eq('project_id', projectId)
+    .is('doc_type', null);
+
+  if (error || !nullDocs || nullDocs.length === 0) return 0;
+
+  let updated = 0;
+  for (const doc of nullDocs) {
+    const inferredType = inferDocType(doc.file_path || doc.title || '');
+    const { error: updateError } = await supabase
+      .from('documents')
+      .update({ doc_type: inferredType })
+      .eq('id', doc.id);
+
+    if (!updateError) updated++;
+  }
+
+  console.log(`[Coverage] Auto-categorized ${updated}/${nullDocs.length} documents with NULL doc_type`);
+  return updated;
+}
+
+/**
  * Calculate documentation coverage for a project.
- * Coverage = categorized documents / total documents.
+ * Coverage = documents with embeddings / total documents.
+ * Also auto-categorizes any NULL doc_type documents before counting.
  */
 export async function calculateCoverage(projectId: string): Promise<CoverageResult> {
-  // Query documents grouped by doc_type for this project
+  // Step 1: Auto-categorize NULL doc_type documents
+  await autoCategorizeNullDocTypes(projectId);
+
+  // Step 2: Query all documents for this project
   const { data: docs, error } = await supabase
     .from('documents')
-    .select('doc_type')
+    .select('id, doc_type')
     .eq('project_id', projectId);
 
   if (error) {
     throw new Error(`Failed to fetch documents: ${error.message}`);
   }
 
-  // Count documents by type
-  const counts = {
-    architecture: 0,
-    testing_pattern: 0,
-    contract: 0,
-    meta: 0,
-    uncategorized: 0,
-  };
+  const totalDocuments = docs?.length || 0;
+
+  // Step 3: Count distinct document_ids in document_embeddings (docs with embeddings)
+  const { data: embeddingData, error: embError } = await supabase
+    .from('document_embeddings')
+    .select('document_id')
+    .in('document_id', (docs || []).map(d => d.id));
+
+  if (embError) {
+    throw new Error(`Failed to fetch embeddings: ${embError.message}`);
+  }
+
+  const docIdsWithEmbeddings = new Set((embeddingData || []).map(e => e.document_id));
+  const docsWithEmbeddings = docIdsWithEmbeddings.size;
+  const totalChunks = embeddingData?.length || 0;
+
+  // Step 4: Count documents by actual doc_type (dynamic categories)
+  const typeCounts: Record<string, number> = {};
+  let uncategorizedCount = 0;
 
   for (const doc of docs || []) {
     const docType = doc.doc_type;
-    if (docType === 'architecture') counts.architecture++;
-    else if (docType === 'testing-pattern') counts.testing_pattern++;
-    else if (docType === 'contract') counts.contract++;
-    else if (docType === 'meta') counts.meta++;
-    else counts.uncategorized++;
+    if (!docType) {
+      uncategorizedCount++;
+    } else {
+      // Normalize: "testing-pattern" → "testing_pattern" for display key
+      const key = docType.replace(/-/g, '_');
+      typeCounts[key] = (typeCounts[key] || 0) + 1;
+    }
   }
 
-  const totalDocuments = docs?.length || 0;
-  const categorizedDocuments = totalDocuments - counts.uncategorized;
-  const coveragePercentage =
-    totalDocuments > 0 ? Math.round((categorizedDocuments / totalDocuments) * 100) : 0;
+  // Build dynamic breakdown
+  const breakdown: CoverageBreakdown = {};
+  for (const [key, count] of Object.entries(typeCounts)) {
+    breakdown[key] = { count };
+  }
+  if (uncategorizedCount > 0) {
+    breakdown['uncategorized'] = { count: uncategorizedCount };
+  }
 
-  const breakdown: CoverageBreakdown = {
-    architecture: { count: counts.architecture },
-    testing_pattern: { count: counts.testing_pattern },
-    contract: { count: counts.contract },
-    meta: { count: counts.meta },
-    uncategorized: { count: counts.uncategorized },
-  };
+  // Coverage = docs with embeddings / total docs
+  const coveragePercentage =
+    totalDocuments > 0 ? Math.round((docsWithEmbeddings / totalDocuments) * 100) : 0;
+
+  const categorizedDocuments = totalDocuments - uncategorizedCount;
 
   return {
     projectId,
     totalDocuments,
+    docsWithEmbeddings,
+    totalChunks,
     categorizedDocuments,
     coveragePercentage,
     breakdown,
     // backward compat fields for snapshot table
     totalDocumentable: totalDocuments,
-    totalDocumented: categorizedDocuments,
+    totalDocumented: docsWithEmbeddings,
   };
 }
 
@@ -139,18 +190,21 @@ export async function getLatestCoverage(projectId: string): Promise<CoverageResu
   }
 
   // Handle both old-format (with documented/expected) and new-format (with count) snapshots
-  const breakdown = data.breakdown as Record<string, { count?: number; documented?: number; expected?: number }>;
-  const normalizedBreakdown: CoverageBreakdown = {
-    architecture: { count: breakdown.architecture?.count ?? breakdown.architecture?.documented ?? 0 },
-    testing_pattern: { count: breakdown.testing_pattern?.count ?? breakdown.testing_pattern?.documented ?? 0 },
-    contract: { count: breakdown.contract?.count ?? breakdown.contract?.documented ?? 0 },
-    meta: { count: breakdown.meta?.count ?? 0 },
-    uncategorized: { count: breakdown.uncategorized?.count ?? 0 },
-  };
+  const rawBreakdown = data.breakdown as Record<string, { count?: number; documented?: number; expected?: number }>;
+  const normalizedBreakdown: CoverageBreakdown = {};
+
+  for (const [key, value] of Object.entries(rawBreakdown)) {
+    const count = value?.count ?? value?.documented ?? 0;
+    if (count > 0) {
+      normalizedBreakdown[key] = { count };
+    }
+  }
 
   return {
     projectId: data.project_id,
     totalDocuments: data.total_documentable ?? 0,
+    docsWithEmbeddings: data.total_documented ?? 0,
+    totalChunks: 0, // Not stored in snapshot, recalculated on scan
     categorizedDocuments: data.total_documented ?? 0,
     coveragePercentage: data.coverage_percentage ?? 0,
     breakdown: normalizedBreakdown,

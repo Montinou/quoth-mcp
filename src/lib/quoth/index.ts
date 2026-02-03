@@ -36,6 +36,7 @@ export {
   saveCoverageSnapshot,
   getLatestCoverage,
   type CoverageResult,
+  type CoverageBreakdown,
   type DocType,
 } from './coverage';
 

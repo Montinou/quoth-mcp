@@ -98,10 +98,13 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       projectId,
       userId: user.id,
       eventType: 'coverage_scan',
-      resultCount: coverage.totalDocumented,
+      resultCount: coverage.docsWithEmbeddings,
       context: {
         percentage: coverage.coveragePercentage,
-        totalDocumentable: coverage.totalDocumentable,
+        totalDocuments: coverage.totalDocuments,
+        docsWithEmbeddings: coverage.docsWithEmbeddings,
+        totalChunks: coverage.totalChunks,
+        categorizedDocuments: coverage.categorizedDocuments,
       },
     });
 

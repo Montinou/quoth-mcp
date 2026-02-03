@@ -114,6 +114,8 @@ describe('Phase 3 Insights Exports', () => {
       const result: CoverageResult = {
         projectId: 'test-project',
         totalDocuments: 10,
+        docsWithEmbeddings: 8,
+        totalChunks: 50,
         categorizedDocuments: 8,
         coveragePercentage: 80,
         breakdown: {

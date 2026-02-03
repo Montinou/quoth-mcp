@@ -62,6 +62,7 @@ export function registerQuothTools(
         userId: authContext.user_id,
         eventType: 'search',
         query,
+        toolName: 'quoth_search_index',
       });
 
       try {
@@ -73,25 +74,16 @@ export function registerQuothTools(
         const tier = await getTierForProject(authContext.project_id);
         const usageInfo = searchMeta.usageInfo;
 
-        // Log activity (non-blocking)
+        // Calculate average relevance for logging
         const avgRelevance = results.length > 0
           ? results.reduce((sum, r) => sum + (r.relevance || 0), 0) / results.length
           : 0;
-        logActivity({
-          projectId: authContext.project_id,
-          userId: authContext.user_id,
-          eventType: 'search',
-          query,
-          resultCount: results.length,
-          relevanceScore: avgRelevance,
-          toolName: 'quoth_search_index',
-        });
 
         if (results.length === 0) {
-          // Log search with zero results
+          // Log search with zero results (single log entry via activityLogger)
           activityLogger.complete({
             resultCount: 0,
-            patternsMatched: [],
+            relevanceScore: 0,
           });
 
           return {
@@ -127,10 +119,10 @@ export function registerQuothTools(
 </chunk>`;
         }).join('\n');
 
-        // Log successful search with results
+        // Log successful search with results (single log entry via activityLogger)
         activityLogger.complete({
           resultCount: results.length,
-          patternsMatched: results.map(r => r.id),
+          relevanceScore: avgRelevance,
         });
 
         // Build usage footer for free tier
