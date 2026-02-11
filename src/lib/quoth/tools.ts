@@ -29,6 +29,7 @@ import * as path from 'path';
 import matter from 'gray-matter';
 import { logActivity } from './activity';
 import { formatCompactGuidelines, formatFullGuidelines, type GuidelinesMode } from './guidelines';
+import { registerAgentTools } from './agent-tools';
 
 // Templates directory path (relative to project root)
 const TEMPLATES_DIR = path.join(process.cwd(), 'quoth-knowledge-template', 'templates');
@@ -974,4 +975,7 @@ Modes:
 
   // Register Genesis tools
   registerGenesisTools(server, authContext);
+
+  // Register Agent CRUD tools (v3.0)
+  registerAgentTools(server, authContext);
 }
