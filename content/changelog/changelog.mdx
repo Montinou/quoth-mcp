@@ -132,6 +132,41 @@ The Analytics page now tracks documentation health with four new features:
 
 ---
 
+## February 2026
+
+### 2026-02-11
+
+**Quoth v3.0: Multi-Agent, Multi-Organization Platform**
+
+Major architectural evolution from single-project to multi-organization platform.
+
+**New Tables**
+- `organizations` — top-level container for agents and projects
+- `agents` — registered agents with lifecycle management
+- `agent_projects` — optional many-to-many agent-project assignment
+- `curator_log` — curator activity tracking
+
+**Extended Tables**
+- `documents` — added `agent_id`, `visibility` (project/shared), `tags`
+- `document_proposals` — added `agent_id`, `source_instance`
+- `projects` — added `organization_id`
+
+**New MCP Tools**
+- `quoth_agent_register` — register agent in organization
+- `quoth_agent_update` — update agent profile/status
+- `quoth_agent_remove` — archive or delete agent
+- `quoth_agent_list` — list agents with filters
+- `quoth_agent_assign_project` — assign agent to project
+- `quoth_agent_unassign_project` — remove assignment
+
+**Infrastructure**
+- RLS policies on all new tables (`has_org_access`, `is_org_admin`)
+- `match_shared_documents` RPC for cross-project search
+- Document templates (agent-profile, decision-record, how-to, project-brief)
+- Backward compatible: existing v2.0 projects auto-migrated
+
+---
+
 ## December 2025
 
 ### 2025-12-20
