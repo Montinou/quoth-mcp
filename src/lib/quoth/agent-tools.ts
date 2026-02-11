@@ -8,29 +8,40 @@
  */
 
 import { z } from 'zod';
-import { createHash } from 'crypto';
+import { createHash, createHmac } from 'crypto';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { AuthContext } from '../auth/mcp-auth';
 import { supabase } from '../supabase';
 import { logActivity } from './activity';
 
 /**
- * Generate a lightweight identity signature for audit trail.
- * Format: {agent_name}:{instance}:{8char}@{unix_timestamp}
- * Falls back to "unknown@{timestamp}" if agent has no signing_key.
+ * Generate HMAC-SHA256 signature for agent messages.
+ * Returns first 16 hex characters of the HMAC digest.
  */
-export async function generateSignature(agentId: string): Promise<string> {
-  const ts = Math.floor(Date.now() / 1000);
+export async function generateSignature(agentId: string, messageText: string): Promise<string> {
   const { data } = await supabase
     .from('agents')
     .select('signing_key')
     .eq('id', agentId)
     .single();
 
-  if (data?.signing_key) {
-    return `${data.signing_key}@${ts}`;
+  if (!data?.signing_key) {
+    throw new Error(`Agent ${agentId} has no signing key`);
   }
-  return `unknown@${ts}`;
+
+  // HMAC-SHA256 of message content using agent's signing key
+  const hmac = createHmac('sha256', data.signing_key);
+  hmac.update(messageText);
+  return hmac.digest('hex').substring(0, 16);
+}
+
+/**
+ * Verify HMAC signature for agent messages.
+ * Returns true if the provided signature matches the expected signature.
+ */
+export async function verifySignature(agentId: string, messageText: string, signature: string): Promise<boolean> {
+  const expected = await generateSignature(agentId, messageText);
+  return expected === signature;
 }
 
 /**
@@ -676,8 +687,13 @@ The agent still has access to org-wide knowledge and messaging.`,
         toAgentId = toAgent.id;
       }
 
-      // Generate lightweight identity signature for audit trail
-      const signature = await generateSignature(fromAgentId);
+      // Generate created_at timestamp for signature
+      const createdAt = new Date().toISOString();
+      const payload = { message };
+      
+      // Generate HMAC signature: from:to:payload:timestamp
+      const messageText = `${fromAgentId}:${toAgentId}:${JSON.stringify(payload)}:${createdAt}`;
+      const signature = await generateSignature(fromAgentId, messageText);
 
       // Insert message
       const { data, error } = await supabase
@@ -687,12 +703,13 @@ The agent still has access to org-wide knowledge and messaging.`,
           from_agent_id: fromAgentId,
           to_agent_id: toAgentId,
           type: type || 'message',
-          payload: { message },
+          payload,
           priority: priority || 'normal',
           channel,
           reply_to,
           signature,
           status: 'pending',
+          created_at: createdAt,
         })
         .select()
         .single();
@@ -958,8 +975,12 @@ ${formatted}`,
         assignedToId = agent.id;
       }
 
-      // Generate signature for audit trail
-      const signature = await generateSignature(createdBy);
+      // Generate created_at timestamp for signature
+      const createdAt = new Date().toISOString();
+      
+      // Generate HMAC signature: created_by:assigned_to:title:payload:timestamp
+      const taskText = `${createdBy}:${assignedToId}:${title}:${JSON.stringify(payload || {})}:${createdAt}`;
+      const signature = await generateSignature(createdBy, taskText);
 
       // Insert task
       const { data, error } = await supabase
@@ -975,6 +996,7 @@ ${formatted}`,
           payload,
           status: 'pending',
           signature,
+          created_at: createdAt,
         })
         .select()
         .single();
