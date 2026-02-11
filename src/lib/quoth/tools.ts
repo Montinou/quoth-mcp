@@ -29,7 +29,7 @@ import * as path from 'path';
 import matter from 'gray-matter';
 import { logActivity } from './activity';
 import { formatCompactGuidelines, formatFullGuidelines, type GuidelinesMode } from './guidelines';
-import { registerAgentTools, getOrganizationId } from './agent-tools';
+import { registerAgentTools, getOrganizationId, generateSignature } from './agent-tools';
 
 // Templates directory path (relative to project root)
 const TEMPLATES_DIR = path.join(process.cwd(), 'quoth-knowledge-template', 'templates');
@@ -419,6 +419,12 @@ ${evidence_snippet.slice(0, 200)}${evidence_snippet.length > 200 ? '...' : ''}
           }
 
           // 5b. Approval required for new documents - create proposal with null original
+          // Generate signature if agent_id provided
+          let proposalSignature: string | undefined;
+          if (agent_id) {
+            try { proposalSignature = await generateSignature(agent_id); } catch {}
+          }
+
           const { data: proposal, error } = await supabase
             .from('document_proposals')
             .insert({
@@ -432,6 +438,7 @@ ${evidence_snippet.slice(0, 200)}${evidence_snippet.length > 200 ? '...' : ''}
               status: 'pending',
               ...(agent_id && { agent_id }),
               ...(source_instance && { source_instance }),
+              ...(proposalSignature && { signature: proposalSignature }),
             })
             .select()
             .single();
@@ -497,6 +504,11 @@ ${reasoning}
         }
 
         // 6b. APPROVAL REQUIRED MODE - Insert proposal into Supabase
+        let updateSignature: string | undefined;
+        if (agent_id) {
+          try { updateSignature = await generateSignature(agent_id); } catch {}
+        }
+
         const { data: proposal, error } = await supabase
           .from('document_proposals')
           .insert({
@@ -510,6 +522,7 @@ ${reasoning}
             status: 'pending',
             ...(agent_id && { agent_id }),
             ...(source_instance && { source_instance }),
+            ...(updateSignature && { signature: updateSignature }),
           })
           .select()
           .single();

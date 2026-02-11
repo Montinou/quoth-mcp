@@ -15,6 +15,25 @@ import { supabase } from '../supabase';
 import { logActivity } from './activity';
 
 /**
+ * Generate a lightweight identity signature for audit trail.
+ * Format: {agent_name}:{instance}:{8char}@{unix_timestamp}
+ * Falls back to "unknown@{timestamp}" if agent has no signing_key.
+ */
+export async function generateSignature(agentId: string): Promise<string> {
+  const ts = Math.floor(Date.now() / 1000);
+  const { data } = await supabase
+    .from('agents')
+    .select('signing_key')
+    .eq('id', agentId)
+    .single();
+
+  if (data?.signing_key) {
+    return `${data.signing_key}@${ts}`;
+  }
+  return `unknown@${ts}`;
+}
+
+/**
  * Derive organization_id from the authenticated project
  * All agent operations are scoped to the organization
  */
@@ -657,15 +676,8 @@ The agent still has access to org-wide knowledge and messaging.`,
         toAgentId = toAgent.id;
       }
 
-      // Generate HMAC signature
-      const now = new Date().toISOString();
-      const signingSecret =
-        process.env.BUS_SIGNING_SECRET || 'default-secret';
-      const sigInput = `${fromAgentId}:${toAgentId}:${now}:${signingSecret}`;
-      const signature = createHash('sha256')
-        .update(sigInput)
-        .digest('hex')
-        .slice(0, 16);
+      // Generate lightweight identity signature for audit trail
+      const signature = await generateSignature(fromAgentId);
 
       // Insert message
       const { data, error } = await supabase
@@ -946,6 +958,9 @@ ${formatted}`,
         assignedToId = agent.id;
       }
 
+      // Generate signature for audit trail
+      const signature = await generateSignature(createdBy);
+
       // Insert task
       const { data, error } = await supabase
         .from('agent_tasks')
@@ -959,6 +974,7 @@ ${formatted}`,
           deadline: deadline || null,
           payload,
           status: 'pending',
+          signature,
         })
         .select()
         .single();
