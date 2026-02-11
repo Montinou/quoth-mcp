@@ -163,23 +163,48 @@ export async function POST(request: Request) {
     // Get raw body for signature verification
     const rawBody = await request.text();
 
+    // Log all incoming headers for debugging
+    const headerEntries: Record<string, string> = {};
+    request.headers.forEach((value, key) => {
+      // Mask sensitive values but show the key and first/last chars
+      if (key.toLowerCase().includes('auth') || key.toLowerCase().includes('secret') || key.toLowerCase().includes('signature')) {
+        headerEntries[key] = value.length > 8 ? `${value.slice(0, 4)}...${value.slice(-4)} (len=${value.length})` : '[short]';
+      } else {
+        headerEntries[key] = value.slice(0, 100);
+      }
+    });
+    console.log('[Auth Hook] Incoming headers:', JSON.stringify(headerEntries));
+
     // Supabase Auth Hooks can send auth via:
     // 1. Authorization: Bearer <secret> header (HTTP Hook mode)
     // 2. svix-signature / webhook-signature headers (Webhook mode)
+    // 3. x-supabase-webhook-secret header
     const authHeader = request.headers.get('authorization');
     const webhookSecret = process.env.SUPABASE_WEBHOOK_SECRET;
+    const supabaseWebhookHeader = request.headers.get('x-supabase-webhook-secret');
 
     let isValid = false;
 
     // Method 1: Check Authorization Bearer token (Supabase Auth Hook standard)
     if (authHeader?.startsWith('Bearer ') && webhookSecret) {
       const token = authHeader.slice(7);
-      // Compare against the webhook secret (strip svix prefix if present)
+      // Compare against webhook secret in various formats
       const cleanSecret = webhookSecret.replace(/^v1,whsec_/, '').replace(/^whsec_/, '');
-      isValid = token === webhookSecret || token === cleanSecret;
+      const whsecOnly = webhookSecret.match(/whsec_[A-Za-z0-9+/=]+/)?.[0] || '';
+      isValid = token === webhookSecret || token === cleanSecret || token === whsecOnly;
+      if (!isValid) {
+        console.log(`[Auth Hook] Bearer token mismatch. Token len=${token.length}, secret len=${webhookSecret.length}`);
+      }
     }
 
-    // Method 2: Fall back to svix/webhook signature verification
+    // Method 2: Check x-supabase-webhook-secret header
+    if (!isValid && supabaseWebhookHeader && webhookSecret) {
+      const cleanSecret = webhookSecret.replace(/^v1,whsec_/, '').replace(/^whsec_/, '');
+      const whsecOnly = webhookSecret.match(/whsec_[A-Za-z0-9+/=]+/)?.[0] || '';
+      isValid = supabaseWebhookHeader === webhookSecret || supabaseWebhookHeader === cleanSecret || supabaseWebhookHeader === whsecOnly;
+    }
+
+    // Method 3: Fall back to svix/webhook signature verification
     if (!isValid) {
       const signature = request.headers.get('svix-signature') ||
                         request.headers.get('webhook-signature') ||
@@ -191,7 +216,7 @@ export async function POST(request: Request) {
     }
 
     if (!isValid) {
-      console.error('Invalid webhook signature');
+      console.error('[Auth Hook] All verification methods failed');
       return NextResponse.json(
         { error: 'Invalid signature' },
         { status: 401 }
