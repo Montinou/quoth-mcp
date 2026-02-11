@@ -20,7 +20,12 @@ export type ActivityEventType =
   | 'agent_update'
   | 'agent_remove'
   | 'agent_assign_project'
-  | 'agent_unassign_project';
+  | 'agent_unassign_project'
+  // Agent communication events (v3.0 Phase 2)
+  | 'agent_message_sent'
+  | 'agent_inbox_read'
+  | 'agent_task_created'
+  | 'agent_task_updated';
 
 export interface ActivityLogParams {
   projectId: string;
