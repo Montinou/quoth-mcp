@@ -109,8 +109,21 @@ export async function searchDocumentsWithMeta(
   // Re-check for accurate remaining count after increment
   const updatedUsage = await checkUsageLimit(projectId, 'semantic_search');
 
-  // Generate embedding (now uses Jina or Gemini based on ai.ts config)
-  const queryEmbedding = await import('../ai').then(m => m.generateQueryEmbedding ? m.generateQueryEmbedding(query) : m.generateEmbedding(query));
+  // Import AI functions
+  const aiModule = await import('../ai');
+  
+  // Auto-detect if this is a code query
+  const isCodeQuery = /\b(function|class|method|import|export|const|let|var|def|async|await|return|interface|type|enum|implement|extends|package|module|snippet|code|api|endpoint|route|controller|service|util|helper)\b/i.test(query);
+  const embeddingModel = isCodeQuery ? 'jina-code-embeddings-1.5b' : 'jina-embeddings-v3';
+  
+  debugLog(`Detected query type: ${isCodeQuery ? 'CODE' : 'TEXT'}, using model: ${embeddingModel}`);
+  
+  // Generate embedding with appropriate content type
+  const contentType = isCodeQuery ? 'code' : 'text';
+  const queryEmbedding = await (aiModule.generateQueryEmbedding 
+    ? aiModule.generateQueryEmbedding(query, contentType as 'text' | 'code') 
+    : aiModule.generateEmbedding(query, contentType as 'text' | 'code'));
+  
   debugLog('Embedding generated:', queryEmbedding ? `${queryEmbedding.length} dimensions` : 'FAILED');
 
   // 1. Initial Retrieval (Vector Search)
@@ -119,6 +132,7 @@ export async function searchDocumentsWithMeta(
     match_threshold: 0.1,
     match_count: SEARCH_CONFIG.initialFetchCount,
     filter_project_id: projectId,
+    filter_embedding_model: embeddingModel,
   });
 
   debugLog('RPC match_documents returned:', candidates?.length || 0, 'candidates', error ? `Error: ${error.message}` : '');
@@ -380,10 +394,18 @@ export async function searchChunks(
   // Increment usage
   incrementUsage(projectId, 'semantic_search');
 
-  // Generate embedding
-  const queryEmbedding = await import('../ai').then(m =>
-    m.generateQueryEmbedding ? m.generateQueryEmbedding(query) : m.generateEmbedding(query)
-  );
+  // Import AI functions
+  const aiModule = await import('../ai');
+  
+  // Auto-detect if this is a code query
+  const isCodeQuery = /\b(function|class|method|import|export|const|let|var|def|async|await|return|interface|type|enum|implement|extends|package|module|snippet|code|api|endpoint|route|controller|service|util|helper)\b/i.test(query);
+  const embeddingModel = isCodeQuery ? 'jina-code-embeddings-1.5b' : 'jina-embeddings-v3';
+  const contentType = isCodeQuery ? 'code' : 'text';
+  
+  // Generate embedding with appropriate content type
+  const queryEmbedding = await (aiModule.generateQueryEmbedding 
+    ? aiModule.generateQueryEmbedding(query, contentType as 'text' | 'code') 
+    : aiModule.generateEmbedding(query, contentType as 'text' | 'code'));
 
   // Vector search
   const { data: candidates, error } = await supabase.rpc('match_documents', {
@@ -391,6 +413,7 @@ export async function searchChunks(
     match_threshold: 0.1,
     match_count: SEARCH_CONFIG.initialFetchCount,
     filter_project_id: projectId,
+    filter_embedding_model: embeddingModel,
   });
 
   if (error) throw new Error(`Search failed: ${error.message}`);

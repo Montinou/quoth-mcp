@@ -78,15 +78,22 @@ export function registerQuothTools(
           
           // Generate embedding
           const { generateQueryEmbedding, generateEmbedding } = await import('../ai');
+          
+          // Auto-detect if this is a code query
+          const isCodeQuery = /\b(function|class|method|import|export|const|let|var|def|async|await|return|interface|type|enum|implement|extends|package|module|snippet|code|api|endpoint|route|controller|service|util|helper)\b/i.test(query);
+          const embeddingModel = isCodeQuery ? 'jina-code-embeddings-1.5b' : 'jina-embeddings-v3';
+          const contentType = isCodeQuery ? 'code' : 'text';
+          
           const queryEmbedding = generateQueryEmbedding 
-            ? await generateQueryEmbedding(query) 
-            : await generateEmbedding(query);
+            ? await generateQueryEmbedding(query, contentType as 'text' | 'code') 
+            : await generateEmbedding(query, contentType as 'text' | 'code');
           
           // Call shared search RPC
           const { data: rpcResults, error } = await supabase.rpc('match_shared_documents', {
             query_embedding: queryEmbedding,
             p_organization_id: organizationId,
             match_count: 20,
+            filter_embedding_model: embeddingModel,
           });
           
           if (error) throw new Error(`Shared search failed: ${error.message}`);

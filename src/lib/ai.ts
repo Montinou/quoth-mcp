@@ -41,15 +41,61 @@ const CF_RAG_WORKER_URL = process.env.CF_RAG_WORKER_URL;
 const CF_RAG_API_KEY = process.env.CF_RAG_API_KEY;
 
 /**
- * Generate embedding using Jina Embeddings v3 (optimized for code)
+ * Content type for dual embedding support
  */
-export async function generateJinaEmbedding(text: string): Promise<number[]> {
+export type ContentType = 'text' | 'code';
+
+/**
+ * Detect content type based on heuristics
+ * Returns 'code' if content has code-like patterns, otherwise 'text'
+ */
+export function detectContentType(text: string): ContentType {
+  const lines = text.split('\n').filter(line => line.trim().length > 0);
+  if (lines.length === 0) return 'text';
+
+  let codeSignals = 0;
+  const codeKeywords = /\b(function|class|import|export|const|let|var|def|public|private|protected|interface|enum|struct|impl|trait|async|await|return)\b/;
+  const indentationPattern = /^[\s]{2,}/; // 2+ spaces or tab
+  const codeBlockPattern = /^```/; // Markdown code blocks
+
+  for (const line of lines) {
+    // Check for code keywords
+    if (codeKeywords.test(line)) codeSignals++;
+    
+    // Check for indentation (common in code)
+    if (indentationPattern.test(line)) codeSignals++;
+    
+    // Check for markdown code blocks
+    if (codeBlockPattern.test(line)) codeSignals++;
+    
+    // Check for common code patterns: {}, [], (), ;
+    if (/[{}\[\]();]/.test(line)) codeSignals++;
+  }
+
+  const codeRatio = codeSignals / lines.length;
+  
+  // If >30% of lines have code signals, classify as code
+  return codeRatio > 0.3 ? 'code' : 'text';
+}
+
+/**
+ * Generate embedding using Jina Embeddings v3 (optimized for text)
+ */
+export async function generateJinaEmbedding(text: string, contentType?: ContentType): Promise<number[]> {
   if (!jinaApiKey) {
     throw new Error("Jina API not configured. Set JINA_API_KEY");
   }
 
   const cleanText = text.replace(/\n+/g, " ").trim();
   if (!cleanText) return [];
+
+  // Auto-detect content type if not provided
+  const detectedType = contentType || detectContentType(text);
+  
+  // Use appropriate model based on content type
+  if (detectedType === 'code') {
+    return generateCodeEmbedding(cleanText);
+  }
 
   const response = await fetch('https://api.jina.ai/v1/embeddings', {
     method: 'POST',
@@ -76,13 +122,108 @@ export async function generateJinaEmbedding(text: string): Promise<number[]> {
 }
 
 /**
- * Generate embedding for search query using Jina
+ * Generate code embedding using Jina Code Embeddings v1.5b
+ * Optimized for code snippets, functions, and technical content
  */
-export async function generateQueryEmbedding(query: string): Promise<number[]> {
+export async function generateCodeEmbedding(text: string): Promise<number[]> {
+  if (!jinaApiKey) {
+    throw new Error("Jina API not configured. Set JINA_API_KEY");
+  }
+
+  const cleanText = text.replace(/\n+/g, " ").trim();
+  if (!cleanText) return [];
+
+  const response = await fetch('https://api.jina.ai/v1/embeddings', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${jinaApiKey}`
+    },
+    body: JSON.stringify({
+      model: 'jina-code-embeddings-1.5b',
+      task: 'retrieval.passage', // optimized for storing code docs
+      dimensions: 512, // Matryoshka: truncate 896d to 512d
+      input: [cleanText]
+    })
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Jina Code API Error: ${response.status} - ${errorText}`);
+  }
+
+  const data = await response.json();
+  return data.data[0].embedding;
+}
+
+/**
+ * Generate query embedding for code search
+ * Optimized for code-related queries
+ */
+export async function generateCodeQueryEmbedding(query: string): Promise<number[]> {
+  if (!jinaApiKey) {
+    throw new Error("Jina API not configured. Set JINA_API_KEY");
+  }
+
+  debugLog('Generating code query embedding for:', query.slice(0, 100));
+
+  const response = await fetch('https://api.jina.ai/v1/embeddings', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${jinaApiKey}`
+    },
+    body: JSON.stringify({
+      model: 'jina-code-embeddings-1.5b',
+      task: 'retrieval.query', // optimized for code queries
+      dimensions: 512,
+      input: [query]
+    })
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Jina Code API Error: ${response.status} - ${errorText}`);
+  }
+
+  const data = await response.json();
+  const embedding = data.data[0].embedding;
+  debugLog('Successfully generated code embedding:', embedding ? `${embedding.length} dimensions` : 'FAILED');
+  return embedding;
+}
+
+/**
+ * Detect if a query is code-related based on keywords
+ */
+function isCodeQuery(query: string): boolean {
+  const codeKeywords = [
+    'function', 'class', 'method', 'import', 'export', 'const', 'let', 'var',
+    'def', 'async', 'await', 'return', 'interface', 'type', 'enum',
+    'implement', 'extends', 'package', 'module', 'snippet', 'code',
+    'api', 'endpoint', 'route', 'controller', 'service', 'util', 'helper'
+  ];
+  
+  const lowerQuery = query.toLowerCase();
+  return codeKeywords.some(keyword => lowerQuery.includes(keyword));
+}
+
+/**
+ * Generate embedding for search query using Jina
+ * Automatically detects if query is code-related and uses appropriate model
+ */
+export async function generateQueryEmbedding(query: string, contentType?: ContentType): Promise<number[]> {
   debugLog('Generating query embedding for:', query.slice(0, 100));
 
   if (!jinaApiKey) {
     throw new Error("Jina API not configured. Set JINA_API_KEY");
+  }
+
+  // Auto-detect if this is a code query
+  const isCode = contentType === 'code' || (contentType === undefined && isCodeQuery(query));
+  
+  if (isCode) {
+    debugLog('Code query detected, using jina-code-embeddings-1.5b');
+    return generateCodeQueryEmbedding(query);
   }
 
   debugLog('Calling Jina API (model: jina-embeddings-v3, task: retrieval.query, dims: 512)');
@@ -113,14 +254,16 @@ export async function generateQueryEmbedding(query: string): Promise<number[]> {
 }
 
 /**
- * Legacy/Fallback: Generate a 768-dimensional embedding vector for text
- * Uses Google Gemini text-embedding-004 model
+ * Legacy/Fallback: Generate a 512-dimensional embedding vector for text
+ * Uses Jina embeddings (primary) or falls back to Gemini text-embedding-004
+ * @param text - Text to embed
+ * @param contentType - Optional content type hint ('text' or 'code')
  */
-export async function generateEmbedding(text: string): Promise<number[]> {
+export async function generateEmbedding(text: string, contentType?: ContentType): Promise<number[]> {
   // Prefer Jina if available for this new architecture
   if (jinaApiKey) {
     try {
-      return await generateJinaEmbedding(text);
+      return await generateJinaEmbedding(text, contentType);
     } catch (e) {
       debugLog("Jina generation failed, falling back to Gemini", e);
     }

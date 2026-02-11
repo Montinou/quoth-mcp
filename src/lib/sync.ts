@@ -1,7 +1,7 @@
 import { createHash } from "crypto";
 import matter from "gray-matter";
 import { supabase, type Document } from "./supabase";
-import { generateEmbedding } from "./ai";
+import { generateEmbedding, detectContentType } from "./ai";
 
 import { astChunker, type CodeChunk } from "./quoth/chunking";
 
@@ -190,15 +190,23 @@ export async function syncDocument(
   let indexedCount = 0;
   for (const chunk of chunksToEmbed) {
     try {
-      const embedding = await generateEmbedding(chunk.content);
+      // Detect content type (text vs code) for appropriate embedding model
+      const contentType = detectContentType(chunk.content);
+      const embeddingModel = contentType === 'code' ? 'jina-code-embeddings-1.5b' : 'jina-embeddings-v3';
+      
+      // Generate embedding with appropriate model
+      const embedding = await generateEmbedding(chunk.content, contentType);
+      
       await supabase.from("document_embeddings").insert({
         document_id: doc.id,
         content_chunk: chunk.content,
         chunk_hash: chunk.hash,
         embedding,
+        embedding_model: embeddingModel,
         metadata: { 
           chunk_index: chunk.index, 
           source: "incremental-sync",
+          content_type: contentType,
           ...chunk.metadata
         },
       });
