@@ -29,7 +29,7 @@ import * as path from 'path';
 import matter from 'gray-matter';
 import { logActivity } from './activity';
 import { formatCompactGuidelines, formatFullGuidelines, type GuidelinesMode } from './guidelines';
-import { registerAgentTools } from './agent-tools';
+import { registerAgentTools, getOrganizationId } from './agent-tools';
 
 // Templates directory path (relative to project root)
 const TEMPLATES_DIR = path.join(process.cwd(), 'quoth-knowledge-template', 'templates');
@@ -51,12 +51,14 @@ export function registerQuothTools(
     {
       title: 'Semantic Search Quoth Documentation',
       description:
-        'Performs semantic search across the Quoth documentation using AI embeddings. Returns relevant document chunks ranked by similarity. Much smarter than keyword matching - understands meaning and context.',
+        'Performs semantic search across Quoth documentation using AI embeddings. Returns relevant document chunks ranked by similarity. Use scope="shared" to search cross-project shared knowledge across your organization.',
       inputSchema: {
         query: z.string().max(1000).describe('Natural language search query, e.g. "how to mock dependencies in tests", "database connection patterns" (max 1000 chars)'),
+        scope: z.enum(['project', 'shared', 'org']).optional().default('project')
+          .describe('Search scope: "project" (default, current project only), "shared" (cross-project shared knowledge), "org" (all org documents)'),
       },
     },
-    async ({ query }) => {
+    async ({ query, scope }) => {
       // Start activity logging with timing
       const activityLogger = createActivityLogger({
         projectId: authContext.project_id,
@@ -67,9 +69,52 @@ export function registerQuothTools(
       });
 
       try {
-        // Use searchDocumentsWithMeta for tier-aware search
-        const searchMeta = await searchDocumentsWithMeta(query, authContext.project_id);
-        const results = searchMeta.results;
+        let results: any[];
+        let searchMeta: any;
+
+        // Shared/org scope search
+        if (scope === 'shared' || scope === 'org') {
+          const organizationId = await getOrganizationId(authContext.project_id);
+          
+          // Generate embedding
+          const { generateQueryEmbedding, generateEmbedding } = await import('../ai');
+          const queryEmbedding = generateQueryEmbedding 
+            ? await generateQueryEmbedding(query) 
+            : await generateEmbedding(query);
+          
+          // Call shared search RPC
+          const { data: rpcResults, error } = await supabase.rpc('match_shared_documents', {
+            query_embedding: queryEmbedding,
+            p_organization_id: organizationId,
+            match_count: 20,
+          });
+          
+          if (error) throw new Error(`Shared search failed: ${error.message}`);
+          
+          // Format results from match_shared_documents RPC
+          results = (rpcResults || []).map((doc: any) => ({
+            document_id: doc.document_id,
+            title: doc.title,
+            project_slug: doc.project_slug,
+            agent_id: doc.agent_id,
+            agent_name: doc.agent_name,
+            tags: doc.tags,
+            snippet: doc.content_chunk,
+            relevance: doc.similarity,
+          }));
+          
+          // Create mock searchMeta for compatibility
+          searchMeta = {
+            results,
+            usedFallback: false,
+            tierMessage: null,
+            usageInfo: null,
+          };
+        } else {
+          // Project scope (default) - existing behavior
+          searchMeta = await searchDocumentsWithMeta(query, authContext.project_id);
+          results = searchMeta.results;
+        }
 
         // Get tier info for usage footer
         const tier = await getTierForProject(authContext.project_id);

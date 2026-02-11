@@ -18,7 +18,7 @@ import { logActivity } from './activity';
  * Derive organization_id from the authenticated project
  * All agent operations are scoped to the organization
  */
-async function getOrganizationId(projectId: string): Promise<string> {
+export async function getOrganizationId(projectId: string): Promise<string> {
   const { data, error } = await supabase
     .from('projects')
     .select('organization_id')
