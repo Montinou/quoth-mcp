@@ -48,7 +48,8 @@ interface AuthEmailPayload {
 async function verifyWebhookSignature(
   payload: string,
   signatureHeader: string | null,
-  timestampHeader: string | null
+  timestampHeader: string | null,
+  webhookId: string | null
 ): Promise<boolean> {
   const webhookSecret = process.env.SUPABASE_WEBHOOK_SECRET;
 
@@ -68,27 +69,44 @@ async function verifyWebhookSignature(
     return false;
   }
 
-  // Supabase uses svix-style signatures: v1,<signature1> v1,<signature2>
-  // Or simple signature format depending on hook configuration
+  // Supabase uses svix-style webhook signatures
+  // Format: webhook-id.webhook-timestamp.body signed with HMAC-SHA256
+  // Secret format: v1,whsec_<base64-encoded-key>
   try {
-    // Handle svix-style signature format
+    // Extract the raw key from the svix secret format
+    // Secret is: "v1,whsec_<base64>" — we need to base64-decode the part after "whsec_"
+    let secretBytes: Uint8Array;
+    const whsecMatch = webhookSecret.match(/whsec_([A-Za-z0-9+/=]+)/);
+    if (whsecMatch) {
+      // Svix format: base64-decode the key part
+      secretBytes = new Uint8Array(Buffer.from(whsecMatch[1], 'base64'));
+    } else {
+      // Fallback: use raw string as key
+      secretBytes = new TextEncoder().encode(webhookSecret);
+    }
+
+    // Handle svix-style signature format: "v1,<sig1> v1,<sig2>"
     const signatures = signatureHeader.split(' ');
 
     for (const sig of signatures) {
       const parts = sig.split(',');
       const version = parts[0];
-      const signature = parts[1] || parts[0]; // Handle both "v1,sig" and plain "sig"
+      const signature = parts[1] || parts[0];
 
       if (version === 'v1' || !parts[1]) {
-        // Create HMAC of timestamp + payload (svix format) or just payload
-        const signedPayload = timestampHeader
-          ? `${timestampHeader}.${payload}`
-          : payload;
+        // Svix signed payload format: ${msg_id}.${timestamp}.${body}
+        let signedPayload: string;
+        if (webhookId && timestampHeader) {
+          signedPayload = `${webhookId}.${timestampHeader}.${payload}`;
+        } else if (timestampHeader) {
+          signedPayload = `${timestampHeader}.${payload}`;
+        } else {
+          signedPayload = payload;
+        }
 
-        const encoder = new TextEncoder();
         const key = await crypto.subtle.importKey(
           'raw',
-          encoder.encode(webhookSecret),
+          secretBytes,
           { name: 'HMAC', hash: 'SHA-256' },
           false,
           ['sign']
@@ -97,20 +115,12 @@ async function verifyWebhookSignature(
         const signatureBuffer = await crypto.subtle.sign(
           'HMAC',
           key,
-          encoder.encode(signedPayload)
+          new TextEncoder().encode(signedPayload)
         );
 
-        // Convert to base64
         const expectedSignature = Buffer.from(signatureBuffer).toString('base64');
 
-        // Constant-time comparison
         if (signature === expectedSignature) {
-          return true;
-        }
-
-        // Also try hex format
-        const expectedSignatureHex = Buffer.from(signatureBuffer).toString('hex');
-        if (signature === expectedSignatureHex) {
           return true;
         }
       }
@@ -206,13 +216,15 @@ export async function POST(request: Request) {
 
     // Method 3: Fall back to svix/webhook signature verification
     if (!isValid) {
-      const signature = request.headers.get('svix-signature') ||
-                        request.headers.get('webhook-signature') ||
+      const signature = request.headers.get('webhook-signature') ||
+                        request.headers.get('svix-signature') ||
                         request.headers.get('x-webhook-signature');
-      const timestamp = request.headers.get('svix-timestamp') ||
-                        request.headers.get('webhook-timestamp');
+      const timestamp = request.headers.get('webhook-timestamp') ||
+                        request.headers.get('svix-timestamp');
+      const msgId = request.headers.get('webhook-id') ||
+                    request.headers.get('svix-id');
 
-      isValid = await verifyWebhookSignature(rawBody, signature, timestamp);
+      isValid = await verifyWebhookSignature(rawBody, signature, timestamp, msgId);
     }
 
     if (!isValid) {
