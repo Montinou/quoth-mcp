@@ -228,9 +228,10 @@ Instructions:
         'Retrieves the full content of a specific documentation file by its title or path. Returns the complete Markdown content with metadata.',
       inputSchema: {
         doc_id: z.string().max(500).describe('The document title or file path, e.g. "backend-unit-vitest" or "patterns/backend-unit-vitest.md"'),
+        scope: z.enum(['project', 'org']).optional().describe('Search scope: "project" (default, project-local only) or "org" (includes shared docs from same organization)'),
       },
     },
-    async ({ doc_id }) => {
+    async ({ doc_id, scope }) => {
       // Start activity logging with timing
       const activityLogger = createActivityLogger({
         projectId: authContext.project_id,
@@ -241,7 +242,15 @@ Instructions:
 
       try {
         // Use authContext.project_id for multi-tenant isolation
-        const doc = await readDocument(doc_id, authContext.project_id);
+        let doc = await readDocument(doc_id, authContext.project_id, scope || 'project');
+
+        // If scope='org' and doc not found in project, search in org-shared docs
+        if (!doc && scope === 'org') {
+          const orgId = await getOrganizationId(authContext.project_id);
+          if (orgId) {
+            doc = await readDocument(doc_id, authContext.project_id, scope, orgId);
+          }
+        }
 
         // Log activity (non-blocking)
         logActivity({

@@ -222,7 +222,9 @@ function transformMatchToDocRef(match: MatchResult, score?: number): DocumentRef
  */
 export async function readDocument(
   docId: string,
-  projectId: string
+  projectId: string,
+  scope: 'project' | 'org' = 'project',
+  organizationId?: string
 ): Promise<QuothDocument | null> {
   if (!isSupabaseConfigured()) {
     throw new Error('Supabase not configured');
@@ -243,7 +245,7 @@ export async function readDocument(
     .single();
 
   if (error || !data) {
-    // Try partial match on title
+    // Try partial match on title within project
     const { data: partialMatch } = await supabase
       .from('documents')
       .select('*')
@@ -252,11 +254,42 @@ export async function readDocument(
       .limit(1)
       .single();
 
-    if (!partialMatch) {
-      return null;
+    if (partialMatch) {
+      return transformToQuothDocument(partialMatch);
     }
 
-    return transformToQuothDocument(partialMatch);
+    // If scope='org' and organizationId provided, search in shared docs
+    if (scope === 'org' && organizationId) {
+      // Search for shared docs in the same organization
+      const { data: sharedDoc } = await supabase
+        .from('documents')
+        .select('*, projects!inner(organization_id)')
+        .eq('visibility', 'shared')
+        .eq('projects.organization_id', organizationId)
+        .or(`file_path.eq.${docId},title.eq.${docId}`)
+        .limit(1)
+        .single();
+
+      if (sharedDoc) {
+        return transformToQuothDocument(sharedDoc);
+      }
+
+      // Try partial match on shared docs
+      const { data: sharedPartialMatch } = await supabase
+        .from('documents')
+        .select('*, projects!inner(organization_id)')
+        .eq('visibility', 'shared')
+        .eq('projects.organization_id', organizationId)
+        .ilike('title', `%${docId}%`)
+        .limit(1)
+        .single();
+
+      if (sharedPartialMatch) {
+        return transformToQuothDocument(sharedPartialMatch);
+      }
+    }
+
+    return null;
   }
 
   return transformToQuothDocument(data);
