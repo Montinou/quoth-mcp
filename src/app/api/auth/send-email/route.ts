@@ -18,7 +18,7 @@ import { EmailChangeEmail } from '@/emails/EmailChangeEmail';
 const resend = new Resend(process.env.RESEND_API_KEY);
 
 // Email configuration
-const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'Quoth <noreply@ai-innovation.site>';
+const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'Quoth <quoth@triqual.dev>';
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://quoth.ai-innovation.site';
 
 // Supabase Auth Hook payload types
