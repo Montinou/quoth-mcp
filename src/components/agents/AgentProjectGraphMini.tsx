@@ -15,6 +15,17 @@ import {
 import '@xyflow/react/dist/style.css';
 import { Bot, FolderOpen } from 'lucide-react';
 
+interface AgentData {
+  id: string;
+  agent_name: string;
+  display_name: string | null;
+}
+
+interface ProjectData {
+  id: string;
+  slug: string;
+}
+
 interface Assignment {
   agent_id: string;
   project_id: string;
@@ -28,7 +39,7 @@ interface Props {
 }
 
 // Simplified node components for mini view
-function MiniAgentNode({ data }: { data: Agent }) {
+function MiniAgentNode({ data }: { data: AgentData }) {
   return (
     <div className="px-3 py-2 rounded-lg bg-violet-spectral/20 border border-violet-spectral flex items-center gap-2">
       <Bot className="w-3 h-3 text-violet-spectral" />
@@ -39,7 +50,7 @@ function MiniAgentNode({ data }: { data: Agent }) {
   );
 }
 
-function MiniProjectNode({ data }: { data: Project }) {
+function MiniProjectNode({ data }: { data: ProjectData }) {
   return (
     <div className="px-3 py-2 rounded-lg bg-charcoal border border-graphite flex items-center gap-2">
       <FolderOpen className="w-3 h-3 text-violet-ghost" />

@@ -21,6 +21,21 @@ import '@xyflow/react/dist/style.css';
 import { Bot, FolderOpen, Circle } from 'lucide-react';
 import Link from 'next/link';
 
+interface AgentData {
+  id: string;
+  agent_name: string;
+  display_name: string | null;
+  instance: string;
+  status: string;
+  isOnline?: boolean;
+}
+
+interface ProjectData {
+  id: string;
+  slug: string;
+  is_public: boolean;
+}
+
 interface Assignment {
   agent_id: string;
   project_id: string;
@@ -35,7 +50,7 @@ interface Props {
 }
 
 // Custom Agent Node
-function AgentNode({ data }: { data: Agent & { isOnline: boolean } }) {
+function AgentNode({ data }: { data: AgentData }) {
   return (
     <Link href={`/agents/${data.agent_name}`}>
       <div className="px-6 py-4 rounded-2xl bg-gradient-to-br from-violet-spectral/20 to-violet-glow/10 border-2 border-violet-spectral shadow-lg shadow-violet-spectral/20 hover:shadow-xl hover:shadow-violet-spectral/30 transition-all cursor-pointer min-w-[200px]">
@@ -62,7 +77,7 @@ function AgentNode({ data }: { data: Agent & { isOnline: boolean } }) {
 }
 
 // Custom Project Node
-function ProjectNode({ data }: { data: Project }) {
+function ProjectNode({ data }: { data: ProjectData }) {
   return (
     <Link href={`/dashboard/${data.slug}`}>
       <div className="px-6 py-4 rounded-2xl bg-gradient-to-br from-charcoal to-graphite border-2 border-graphite shadow-lg hover:border-violet-spectral/50 transition-all cursor-pointer min-w-[200px]">
