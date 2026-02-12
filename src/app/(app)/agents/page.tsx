@@ -7,6 +7,7 @@ import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { Bot, Circle, Clock, Server, FolderOpen, Network } from 'lucide-react';
+import { AgentProjectGraphMini } from '@/components/agents/AgentProjectGraphMini';
 
 interface Agent {
   id: string;
@@ -67,6 +68,18 @@ export default async function AgentsPage() {
     ...agent,
     project_count: agent.agent_projects?.[0]?.count || 0,
   })) as Agent[];
+
+  // Fetch projects and assignments for graph
+  const { data: projects } = await supabase
+    .from('projects')
+    .select('id, slug')
+    .eq('organization_id', profile.organization_id)
+    .order('slug');
+
+  const { data: assignments } = await supabase
+    .from('agent_projects')
+    .select('agent_id, project_id, role')
+    .in('agent_id', agentList.map(a => a.id));
 
   // Status badge component
   const StatusBadge = ({ status, lastSeen }: { status: string; lastSeen: string | null }) => {
@@ -137,8 +150,39 @@ export default async function AgentsPage() {
           </p>
         </div>
 
+        {/* Organization Map Widget */}
+        {agentList.length > 0 && (projects?.length || 0) > 0 && (
+          <div className="glass-panel rounded-2xl p-6 mb-8 animate-stagger stagger-2">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <Network className="w-5 h-5 text-violet-spectral" />
+                <h2 className="text-xl font-semibold text-white">Organization Map</h2>
+                <span className="text-sm text-gray-500">
+                  {agentList.length} agents • {projects?.length || 0} projects • {assignments?.length || 0} connections
+                </span>
+              </div>
+              <Link
+                href="/agents/graph"
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-gradient-to-r from-violet-spectral to-violet-glow hover:from-violet-glow hover:to-violet-spectral text-white transition-all text-sm font-medium"
+              >
+                <span>Full View</span>
+                <Network className="w-4 h-4" />
+              </Link>
+            </div>
+            
+            {/* Embedded mini graph */}
+            <div className="relative h-[400px] rounded-xl bg-obsidian border border-charcoal overflow-hidden">
+              <AgentProjectGraphMini
+                agents={agentList.map(a => ({ id: a.id, agent_name: a.agent_name, display_name: a.display_name }))}
+                projects={projects || []}
+                assignments={assignments || []}
+              />
+            </div>
+          </div>
+        )}
+
         {/* Agent Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8 animate-stagger stagger-2">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8 animate-stagger stagger-3">
           <div className="glass-panel rounded-xl p-5">
             <p className="text-gray-500 text-sm mb-1">Total Agents</p>
             <p className="text-3xl font-bold text-white">{agentList.length}</p>
@@ -159,7 +203,7 @@ export default async function AgentsPage() {
 
         {/* Agent List */}
         {agentList.length === 0 ? (
-          <div className="glass-panel rounded-2xl p-12 text-center animate-stagger stagger-3">
+          <div className="glass-panel rounded-2xl p-12 text-center animate-stagger stagger-4">
             <div className="inline-flex p-5 rounded-2xl bg-gradient-to-br from-violet-spectral/20 to-violet-glow/10 mb-6">
               <Bot className="text-violet-spectral w-10 h-10" />
             </div>
@@ -177,7 +221,7 @@ export default async function AgentsPage() {
             </Link>
           </div>
         ) : (
-          <div className="grid gap-4 animate-stagger stagger-3">
+          <div className="grid gap-4 animate-stagger stagger-4">
             {agentList.map((agent, index) => (
               <Link
                 key={agent.id}
