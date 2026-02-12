@@ -182,7 +182,7 @@ async function main() {
       const chunk = chunks[j];
 
       try {
-        const embedding = await generateJinaEmbedding(chunk, 'passage');
+        const embedding = await generateJinaEmbedding(chunk);
 
         await supabase.from("document_embeddings").insert({
           document_id: doc.id,
