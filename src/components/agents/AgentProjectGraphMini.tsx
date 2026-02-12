@@ -15,18 +15,16 @@ import {
 import '@xyflow/react/dist/style.css';
 import { Bot, FolderOpen } from 'lucide-react';
 
-interface Agent {
+type Agent = Record<string, unknown> & {
   id: string;
   agent_name: string;
   display_name: string | null;
-  [key: string]: unknown;
-}
+};
 
-interface Project {
+type Project = Record<string, unknown> & {
   id: string;
   slug: string;
-  [key: string]: unknown;
-}
+};
 
 interface Assignment {
   agent_id: string;
@@ -70,7 +68,7 @@ const nodeTypes = {
 
 export function AgentProjectGraphMini({ agents, projects, assignments }: Props) {
   const nodes: Node[] = useMemo(() => {
-    const agentNodes = agents.map((agent, index) => ({
+    const agentNodes: Node[] = agents.map((agent, index) => ({
       id: `agent-${agent.id}`,
       type: 'agent',
       position: { x: 50, y: index * 60 + 50 },
@@ -78,7 +76,7 @@ export function AgentProjectGraphMini({ agents, projects, assignments }: Props) 
       draggable: false,
     }));
 
-    const projectNodes = projects.map((project, index) => ({
+    const projectNodes: Node[] = projects.map((project, index) => ({
       id: `project-${project.id}`,
       type: 'project',
       position: { x: 300, y: index * 60 + 50 },
@@ -86,7 +84,7 @@ export function AgentProjectGraphMini({ agents, projects, assignments }: Props) 
       draggable: false,
     }));
 
-    return [...agentNodes, ...projectNodes] as Node[];
+    return [...agentNodes, ...projectNodes];
   }, [agents, projects]);
 
   const edges: Edge[] = useMemo(() => {

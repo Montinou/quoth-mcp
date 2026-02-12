@@ -21,21 +21,19 @@ import '@xyflow/react/dist/style.css';
 import { Bot, FolderOpen, Circle } from 'lucide-react';
 import Link from 'next/link';
 
-interface Agent {
+type Agent = Record<string, unknown> & {
   id: string;
   agent_name: string;
   display_name: string | null;
   instance: string;
   status: string;
-  [key: string]: unknown;
-}
+};
 
-interface Project {
+type Project = Record<string, unknown> & {
   id: string;
   slug: string;
   is_public: boolean;
-  [key: string]: unknown;
-}
+};
 
 interface Assignment {
   agent_id: string;
@@ -104,21 +102,21 @@ const nodeTypes = {
 export function AgentProjectGraph({ agents, projects, assignments, organizationId }: Props) {
   // Convert data to React Flow format
   const initialNodes: Node[] = useMemo(() => {
-    const agentNodes = agents.map((agent, index) => ({
+    const agentNodes: Node[] = agents.map((agent, index) => ({
       id: `agent-${agent.id}`,
       type: 'agent',
       position: { x: 100, y: index * 150 + 100 },
       data: { ...agent, isOnline: false },
     }));
 
-    const projectNodes = projects.map((project, index) => ({
+    const projectNodes: Node[] = projects.map((project, index) => ({
       id: `project-${project.id}`,
       type: 'project',
       position: { x: 600, y: index * 150 + 100 },
       data: { ...project },
     }));
 
-    return [...agentNodes, ...projectNodes] as Node[];
+    return [...agentNodes, ...projectNodes];
   }, [agents, projects]);
 
   const initialEdges: Edge[] = useMemo(() => {
