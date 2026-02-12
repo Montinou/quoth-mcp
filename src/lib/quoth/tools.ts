@@ -429,7 +429,7 @@ ${evidence_snippet.slice(0, 200)}${evidence_snippet.length > 200 ? '...' : ''}
           // Generate signature if agent_id provided
           let proposalSignature: string | undefined;
           if (agent_id) {
-            try { proposalSignature = await generateSignature(agent_id); } catch {}
+            try { proposalSignature = await generateSignature(agent_id, new_content); } catch {}
           }
 
           const { data: proposal, error } = await supabase
@@ -513,7 +513,7 @@ ${reasoning}
         // 6b. APPROVAL REQUIRED MODE - Insert proposal into Supabase
         let updateSignature: string | undefined;
         if (agent_id) {
-          try { updateSignature = await generateSignature(agent_id); } catch {}
+          try { updateSignature = await generateSignature(agent_id, new_content); } catch {}
         }
 
         const { data: proposal, error } = await supabase
