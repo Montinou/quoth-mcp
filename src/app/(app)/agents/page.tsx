@@ -6,7 +6,7 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
-import { Bot, Circle, Clock, Server, FolderOpen } from 'lucide-react';
+import { Bot, Circle, Clock, Server, FolderOpen, Network } from 'lucide-react';
 
 interface Agent {
   id: string;
@@ -112,13 +112,22 @@ export default async function AgentsPage() {
       <div className="max-w-5xl mx-auto">
         {/* Header */}
         <div className="mb-10 animate-stagger stagger-1">
-          <div className="flex items-center gap-3 mb-3">
-            <div className="p-2 rounded-xl bg-gradient-to-br from-violet-spectral/20 to-violet-glow/10 border border-violet-spectral/20">
-              <Bot className="w-5 h-5 text-violet-spectral" />
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-xl bg-gradient-to-br from-violet-spectral/20 to-violet-glow/10 border border-violet-spectral/20">
+                <Bot className="w-5 h-5 text-violet-spectral" />
+              </div>
+              <span className="text-sm font-medium text-violet-ghost/70 uppercase tracking-wider">
+                Multi-Agent System
+              </span>
             </div>
-            <span className="text-sm font-medium text-violet-ghost/70 uppercase tracking-wider">
-              Multi-Agent System
-            </span>
+            <Link
+              href="/agents/graph"
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-violet-spectral to-violet-glow hover:from-violet-glow hover:to-violet-spectral text-white font-semibold transition-all duration-300 shadow-lg shadow-violet-spectral/20 hover:shadow-xl hover:shadow-violet-spectral/30"
+            >
+              <Network className="w-4 h-4" />
+              <span>Graph View</span>
+            </Link>
           </div>
           <h1 className="text-4xl md:text-5xl font-bold font-cinzel text-white mb-3">
             Agent Directory
