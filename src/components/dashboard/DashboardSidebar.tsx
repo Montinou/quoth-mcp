@@ -19,6 +19,7 @@ import {
   ChevronUp,
   Sparkles,
   PieChart,
+  Bot,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { signOutAction } from "@/app/auth/actions";
@@ -65,6 +66,12 @@ const mainNavItems = [
     href: "/proposals",
     icon: FileEdit,
     description: "Review updates",
+  },
+  {
+    title: "Agents",
+    href: "/agents",
+    icon: Bot,
+    description: "Multi-agent system",
   },
   {
     title: "Analytics",
