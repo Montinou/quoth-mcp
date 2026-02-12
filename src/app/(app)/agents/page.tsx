@@ -254,7 +254,7 @@ export default async function AgentsPage() {
                             <span>{agent.role}</span>
                           </div>
                         )}
-                        {agent.project_count > 0 && (
+                        {(agent.project_count ?? 0) > 0 && (
                           <div className="flex items-center gap-1.5">
                             <FolderOpen className="w-4 h-4" />
                             <span>{agent.project_count} project{agent.project_count !== 1 ? 's' : ''}</span>
