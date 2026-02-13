@@ -232,14 +232,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setIsHydrated(true);
 
     // Restore cached profile from localStorage after hydration
+    // ONLY if it matches the current user (prevent cross-user contamination)
     const cachedProfile = getCachedProfile();
-    if (cachedProfile) {
+    if (cachedProfile && user && cachedProfile.id === user.id) {
       setProfile(cachedProfile);
       profileRef.current = cachedProfile;
       // If we have a cached profile, we can skip the loading state
       // (auth init will still run but UI won't flicker)
+    } else if (cachedProfile && (!user || cachedProfile.id !== user.id)) {
+      // Clear stale cache if user changed or logged out
+      setCachedProfile(null);
     }
-  }, []);
+  }, [user]); // ✅ Re-run when user changes to validate cache
 
   useEffect(() => {
     let mounted = true;
