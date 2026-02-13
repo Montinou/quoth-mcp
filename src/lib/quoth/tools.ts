@@ -1233,13 +1233,12 @@ Modes:
       description:
         'Creates a new project in the authenticated user\'s organization. Automatically assigns the user as project admin. If the user has no organization, one is created automatically.',
       inputSchema: {
-        name: z.string().min(1).max(100).describe('Project name (e.g., "My Knowledge Base")'),
-        slug: z.string().min(1).max(100).regex(/^[a-z0-9-]+$/).describe('URL-safe slug (lowercase, numbers, hyphens only, e.g., "my-knowledge-base")'),
+        slug: z.string().min(1).max(100).regex(/^[a-z0-9-]+$/).describe('URL-safe project identifier (lowercase, numbers, hyphens only, e.g., "my-knowledge-base")'),
         github_repo: z.string().max(200).optional().describe('Optional GitHub repository URL (e.g., "owner/repo")'),
         is_public: z.boolean().optional().default(false).describe('Whether the project is publicly accessible (default: false)'),
       },
     },
-    async ({ name, slug, github_repo, is_public }) => {
+    async ({ slug, github_repo, is_public }) => {
       try {
         // 1. Check if user has permission to create projects (must be authenticated)
         if (!authContext.user_id) {
@@ -1355,7 +1354,6 @@ Modes:
             type: 'text' as const,
             text: `## ✅ Project Created Successfully
 
-**Project Name:** ${name}
 **Slug:** \`${slug}\`
 **Project ID:** \`${project.id}\`
 **Visibility:** ${is_public ? 'Public' : 'Private'}

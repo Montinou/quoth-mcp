@@ -201,8 +201,7 @@ Creates a new project in your organization. Automatically assigns you as project
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `name` | string | Yes | Human-readable project name (e.g., "My Knowledge Base") |
-| `slug` | string | Yes | URL-safe identifier (lowercase, numbers, hyphens only) |
+| `slug` | string | Yes | URL-safe project identifier (lowercase, numbers, hyphens only, e.g., "my-team-kb") |
 | `github_repo` | string | No | Optional GitHub repository (e.g., "owner/repo") |
 | `is_public` | boolean | No | Make project publicly accessible (default: false) |
 
@@ -211,7 +210,6 @@ Creates a new project in your organization. Automatically assigns you as project
 ```javascript
 // Create a new private project
 quoth_project_create({
-  name: "My Team Knowledge Base",
   slug: "my-team-kb",
   github_repo: "my-org/docs",
   is_public: false
