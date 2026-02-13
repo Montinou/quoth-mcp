@@ -1599,6 +1599,226 @@ All associated data has been permanently removed:
     }
   );
 
+  // Tool 15: quoth_reindex (Full re-embedding of documents)
+  server.registerTool(
+    'quoth_reindex',
+    {
+      title: 'Reindex Documents (Full Re-embedding)',
+      description:
+        'Completely re-generates embeddings for all documents in a project. ' +
+        'Deletes old embeddings, re-chunks content, and generates fresh embeddings using current embedding models (Jina v3 for text, Jina Code for code). ' +
+        'Useful after embedding model updates or to fix corrupted embeddings. ' +
+        'WARNING: This is a HEAVY operation and may take several minutes for large projects.',
+      inputSchema: {
+        project_id: z.string().uuid().optional().describe('Project ID (defaults to current active project)'),
+      },
+    },
+    async ({ project_id }) => {
+      try {
+        const targetProjectId = project_id || authContext.project_id;
+
+        // Check permission (editor or admin required)
+        if (authContext.role === 'viewer') {
+          return {
+            content: [{
+              type: 'text' as const,
+              text: `❌ Permission Denied: Viewers cannot reindex documents.\n\nOnly users with 'editor' or 'admin' roles can reindex. Contact your project admin.`,
+            }],
+          };
+        }
+
+        // Check access
+        const { data: hasAccess } = await supabase.rpc('has_project_access', { target_project_id: targetProjectId });
+        
+        if (!hasAccess) {
+          return {
+            content: [{
+              type: 'text' as const,
+              text: `❌ Access denied. You don't have permission to reindex this project.`,
+            }],
+          };
+        }
+
+        // Fetch all documents for the project
+        const { data: documents, error: docsError } = await supabase
+          .from('documents')
+          .select('id, file_path, title, content')
+          .eq('project_id', targetProjectId);
+
+        if (docsError) {
+          throw new Error(`Failed to fetch documents: ${docsError.message}`);
+        }
+
+        if (!documents || documents.length === 0) {
+          return {
+            content: [{
+              type: 'text' as const,
+              text: `No documents found in project.\n\nUse \`quoth_propose_update\` to add documents first.`,
+            }],
+          };
+        }
+
+        // Import required functions for re-embedding
+        const { chunkContent, calculateChecksum } = await import('../sync');
+        const { generateEmbedding, detectContentType } = await import('../ai');
+
+        // Reindex each document
+        let totalChunks = 0;
+        const results: Array<{ title: string; chunks: number; error?: string }> = [];
+
+        for (const doc of documents) {
+          try {
+            // 1. Delete ALL old embeddings for this document
+            const { error: deleteError } = await supabase
+              .from('document_embeddings')
+              .delete()
+              .eq('document_id', doc.id);
+
+            if (deleteError) {
+              throw new Error(`Failed to delete old embeddings: ${deleteError.message}`);
+            }
+
+            // 2. Re-chunk the content
+            const chunks = await chunkContent(doc.file_path, doc.content);
+
+            if (chunks.length === 0) {
+              results.push({
+                title: doc.title,
+                chunks: 0,
+                error: 'No chunks generated (empty content?)',
+              });
+              continue;
+            }
+
+            // 3. Generate fresh embeddings for ALL chunks
+            let successCount = 0;
+            for (let i = 0; i < chunks.length; i++) {
+              const chunk = chunks[i];
+              
+              try {
+                // Detect content type (text vs code) for appropriate embedding model
+                const contentType = detectContentType(chunk.content);
+                const embeddingModel = contentType === 'code' ? 'jina-code-embeddings-1.5b' : 'jina-embeddings-v3';
+                
+                // Generate embedding with appropriate model
+                const embedding = await generateEmbedding(chunk.content, contentType);
+                
+                // Calculate chunk hash for future incremental updates
+                const chunkHash = calculateChecksum(chunk.content);
+                
+                // Insert new embedding
+                const { error: insertError } = await supabase
+                  .from('document_embeddings')
+                  .insert({
+                    document_id: doc.id,
+                    content_chunk: chunk.content,
+                    chunk_hash: chunkHash,
+                    embedding,
+                    embedding_model: embeddingModel,
+                    metadata: { 
+                      chunk_index: i,
+                      source: 'full-reindex',
+                      content_type: contentType,
+                      ...chunk.metadata
+                    },
+                  });
+
+                if (insertError) {
+                  console.error(`Failed to insert chunk ${i} for ${doc.title}:`, insertError);
+                } else {
+                  successCount++;
+                }
+
+                // Rate limit between chunks (avoid hitting Jina's rate limits)
+                // 4.2s = ~14 chunks/min (conservative for 20/min limit)
+                if (i < chunks.length - 1) {
+                  await new Promise(r => setTimeout(r, 4200));
+                }
+              } catch (chunkError) {
+                console.error(`Failed to embed chunk ${i} for ${doc.title}:`, chunkError);
+              }
+            }
+
+            totalChunks += successCount;
+
+            results.push({
+              title: doc.title,
+              chunks: successCount,
+              ...(successCount < chunks.length && { 
+                error: `Only ${successCount}/${chunks.length} chunks embedded successfully` 
+              }),
+            });
+
+          } catch (error) {
+            results.push({
+              title: doc.title,
+              chunks: 0,
+              error: error instanceof Error ? error.message : 'Unknown error',
+            });
+          }
+        }
+
+        // Format results
+        const successCount = results.filter(r => !r.error).length;
+        const failCount = results.filter(r => r.error).length;
+
+        const resultSummary = results
+          .map(r => {
+            if (r.error) {
+              return `❌ **${r.title}**: ${r.error}`;
+            }
+            return `✓ **${r.title}**: ${r.chunks} chunks embedded`;
+          })
+          .join('\n');
+
+        // Log activity
+        logActivity({
+          projectId: targetProjectId,
+          userId: authContext.user_id,
+          eventType: 'reindex',
+          query: 'reindex:full-reembed',
+          resultCount: totalChunks,
+          toolName: 'quoth_reindex',
+          context: {
+            totalDocuments: documents.length,
+            successCount,
+            failCount,
+            totalChunks,
+          },
+        });
+
+        return {
+          content: [{
+            type: 'text' as const,
+            text: `## ✅ Full Re-embedding Complete
+
+**Project:** \`${targetProjectId}\`
+**Mode:** Full re-embedding (all embeddings regenerated from scratch)
+
+### Summary
+- **Documents processed:** ${documents.length}
+- **Successful:** ${successCount}
+- **Failed:** ${failCount}
+- **Total chunks embedded:** ${totalChunks}
+
+### Results
+${resultSummary}
+
+---
+*All embeddings have been regenerated using current embedding models (Jina v3 for text, Jina Code for code).*${failCount > 0 ? '\n\n⚠️ Some documents failed to reindex. Check the error messages above.' : ''}`,
+          }],
+        };
+      } catch (error) {
+        return {
+          content: [{
+            type: 'text' as const,
+            text: `Error reindexing documents: ${error instanceof Error ? error.message : 'Unknown error'}`,
+          }],
+        };
+      }
+    }
+  );
+
   // Register Genesis tools
   registerGenesisTools(server, authContext);
 

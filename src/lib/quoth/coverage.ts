@@ -94,18 +94,31 @@ export async function calculateCoverage(projectId: string): Promise<CoverageResu
   const totalDocuments = docs?.length || 0;
 
   // Step 3: Count distinct document_ids in document_embeddings (docs with embeddings)
-  const { data: embeddingData, error: embError } = await supabase
-    .from('document_embeddings')
-    .select('document_id')
-    .in('document_id', (docs || []).map(d => d.id));
+  // Batch the query to avoid timeout with large document sets (Vercel 10s limit)
+  const BATCH_SIZE = 20;
+  const docIds = (docs || []).map(d => d.id);
+  const docIdsWithEmbeddings = new Set<string>();
+  let totalChunks = 0;
 
-  if (embError) {
-    throw new Error(`Failed to fetch embeddings: ${embError.message}`);
+  // Process in batches
+  for (let i = 0; i < docIds.length; i += BATCH_SIZE) {
+    const batch = docIds.slice(i, i + BATCH_SIZE);
+    
+    const { data: embeddingData, error: embError } = await supabase
+      .from('document_embeddings')
+      .select('document_id')
+      .in('document_id', batch);
+
+    if (embError) {
+      throw new Error(`Failed to fetch embeddings: ${embError.message}`);
+    }
+
+    // Collect unique document IDs
+    (embeddingData || []).forEach(e => docIdsWithEmbeddings.add(e.document_id));
+    totalChunks += embeddingData?.length || 0;
   }
 
-  const docIdsWithEmbeddings = new Set((embeddingData || []).map(e => e.document_id));
   const docsWithEmbeddings = docIdsWithEmbeddings.size;
-  const totalChunks = embeddingData?.length || 0;
 
   // Step 4: Count documents by actual doc_type (dynamic categories)
   const typeCounts: Record<string, number> = {};
