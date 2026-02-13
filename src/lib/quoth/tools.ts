@@ -1160,16 +1160,18 @@ Modes:
       try {
         const targetProjectId = project_id || authContext.project_id;
 
-        // Check access via RPC
-        const { data: hasAccess } = await supabase.rpc('has_project_access', { target_project_id: targetProjectId });
-        
-        if (!hasAccess) {
-          return {
-            content: [{
-              type: 'text' as const,
-              text: `❌ Access denied. You don't have permission to view this project.`,
-            }],
-          };
+        // Check access — skip RPC when operating on own project (service role + auth.uid() mismatch)
+        const isOwnProject = targetProjectId === authContext.project_id;
+        if (!isOwnProject) {
+          const { data: hasAccess } = await supabase.rpc('has_project_access', { target_project_id: targetProjectId });
+          if (!hasAccess) {
+            return {
+              content: [{
+                type: 'text' as const,
+                text: `❌ Access denied. You don't have permission to view this project.`,
+              }],
+            };
+          }
         }
 
         // Get project details
@@ -1414,16 +1416,18 @@ Modes:
       try {
         const targetProjectId = project_id || authContext.project_id;
 
-        // Check admin permission
-        const { data: isAdmin } = await supabase.rpc('is_project_admin', { target_project_id: targetProjectId });
-
-        if (!isAdmin) {
-          return {
-            content: [{
-              type: 'text' as const,
-              text: `❌ Permission denied. Only project admins can update settings.`,
-            }],
-          };
+        // Check admin permission — skip RPC when operating on own project with admin role
+        const isOwnProject = targetProjectId === authContext.project_id && authContext.role === 'admin';
+        if (!isOwnProject) {
+          const { data: isAdmin } = await supabase.rpc('is_project_admin', { target_project_id: targetProjectId });
+          if (!isAdmin) {
+            return {
+              content: [{
+                type: 'text' as const,
+                text: `❌ Permission denied. Only project admins can update settings.`,
+              }],
+            };
+          }
         }
 
         // Build update object
@@ -1527,16 +1531,18 @@ Modes:
     },
     async ({ project_id, confirm_slug }) => {
       try {
-        // Check admin permission
-        const { data: isAdmin } = await supabase.rpc('is_project_admin', { target_project_id: project_id });
-
-        if (!isAdmin) {
-          return {
-            content: [{
-              type: 'text' as const,
-              text: `❌ Permission denied. Only project admins can delete projects.`,
-            }],
-          };
+        // Check admin permission — skip RPC when operating on own project with admin role
+        const isOwnProject = project_id === authContext.project_id && authContext.role === 'admin';
+        if (!isOwnProject) {
+          const { data: isAdmin } = await supabase.rpc('is_project_admin', { target_project_id: project_id });
+          if (!isAdmin) {
+            return {
+              content: [{
+                type: 'text' as const,
+                text: `❌ Permission denied. Only project admins can delete projects.`,
+              }],
+            };
+          }
         }
 
         // Get project details for confirmation
@@ -1627,16 +1633,18 @@ All associated data has been permanently removed:
           };
         }
 
-        // Check access
-        const { data: hasAccess } = await supabase.rpc('has_project_access', { target_project_id: targetProjectId });
-        
-        if (!hasAccess) {
-          return {
-            content: [{
-              type: 'text' as const,
-              text: `❌ Access denied. You don't have permission to reindex this project.`,
-            }],
-          };
+        // Check access — skip RPC when operating on own project (service role + auth.uid() mismatch)
+        const isOwnProject = targetProjectId === authContext.project_id;
+        if (!isOwnProject) {
+          const { data: hasAccess } = await supabase.rpc('has_project_access', { target_project_id: targetProjectId });
+          if (!hasAccess) {
+            return {
+              content: [{
+                type: 'text' as const,
+                text: `❌ Access denied. You don't have permission to reindex this project.`,
+              }],
+            };
+          }
         }
 
         // Fetch all documents for the project
