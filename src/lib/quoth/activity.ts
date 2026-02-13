@@ -28,6 +28,8 @@ export type ActivityEventType =
   // Agent communication events (v3.0 Phase 2)
   | 'agent_message_sent'
   | 'agent_inbox_read'
+  // Maintenance events
+  | 'reindex'
   | 'agent_task_created'
   | 'agent_task_updated';
 
