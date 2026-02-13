@@ -17,6 +17,7 @@ Quoth exposes several tools through the Model Context Protocol (MCP). These tool
 | `quoth_list_templates` | List available templates | Yes |
 | `quoth_get_template` | Fetch template structure | Yes |
 | `quoth_read_chunks` | Fetch specific chunks | Yes |
+| `quoth_project_create` | Create new project in your organization | Yes |
 | `quoth_genesis` | Bootstrap project documentation | Yes (admin) |
 
 ## quoth_guidelines
@@ -121,6 +122,55 @@ Submits a documentation update proposal with evidence.
 | `new_content` | string | Yes | Proposed new content (full markdown) |
 | `evidence_snippet` | string | Yes | Code or commit reference |
 | `reasoning` | string | Yes | Why this update is needed |
+
+## quoth_project_create
+
+Creates a new project in your organization. Automatically assigns you as project admin.
+
+<Callout type="info">
+  If you don't have an organization yet, one will be created automatically when you create your first project.
+</Callout>
+
+### Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `name` | string | Yes | Human-readable project name (e.g., "My Knowledge Base") |
+| `slug` | string | Yes | URL-safe identifier (lowercase, numbers, hyphens only) |
+| `github_repo` | string | No | Optional GitHub repository (e.g., "owner/repo") |
+| `is_public` | boolean | No | Make project publicly accessible (default: false) |
+
+### Example
+
+```javascript
+// Create a new private project
+quoth_project_create({
+  name: "My Team Knowledge Base",
+  slug: "my-team-kb",
+  github_repo: "my-org/docs",
+  is_public: false
+})
+```
+
+### Response
+
+Returns project details including:
+- Project ID and slug
+- Dashboard URL
+- Next steps (indexing docs, inviting team, generating API token)
+
+### Permissions
+
+- ✅ Any authenticated user can create projects
+- ✅ Project creator is automatically assigned as admin
+- ❌ Slug must be globally unique
+
+### After Creation
+
+1. **Index Documentation:** Use `quoth_propose_update` to add documents
+2. **Invite Team:** Go to Settings → Members in the dashboard
+3. **Generate API Token:** Settings → API Tokens for MCP authentication
+4. **Switch Context:** Use `quoth_switch_account` if managing multiple projects
 
 ## quoth_genesis
 

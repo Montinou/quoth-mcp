@@ -1060,6 +1060,176 @@ Modes:
     }
   );
 
+  // Tool 10: quoth_project_create (Create new project in user's organization)
+  server.registerTool(
+    'quoth_project_create',
+    {
+      title: 'Create New Project',
+      description:
+        'Creates a new project in the authenticated user\'s organization. Automatically assigns the user as project admin. If the user has no organization, one is created automatically.',
+      inputSchema: {
+        name: z.string().min(1).max(100).describe('Project name (e.g., "My Knowledge Base")'),
+        slug: z.string().min(1).max(100).regex(/^[a-z0-9-]+$/).describe('URL-safe slug (lowercase, numbers, hyphens only, e.g., "my-knowledge-base")'),
+        github_repo: z.string().max(200).optional().describe('Optional GitHub repository URL (e.g., "owner/repo")'),
+        is_public: z.boolean().optional().default(false).describe('Whether the project is publicly accessible (default: false)'),
+      },
+    },
+    async ({ name, slug, github_repo, is_public }) => {
+      try {
+        // 1. Check if user has permission to create projects (must be authenticated)
+        if (!authContext.user_id) {
+          return {
+            content: [{
+              type: 'text' as const,
+              text: '❌ Authentication required. You must be logged in to create projects.',
+            }],
+          };
+        }
+
+        // 2. Check if slug is already taken
+        const { data: existingProject } = await supabase
+          .from('projects')
+          .select('id, slug')
+          .eq('slug', slug)
+          .maybeSingle();
+
+        if (existingProject) {
+          return {
+            content: [{
+              type: 'text' as const,
+              text: `❌ Project slug "${slug}" is already taken. Please choose a different slug.\n\nTry:\n- ${slug}-kb\n- ${slug}-${Date.now()}\n- ${slug}-v2`,
+            }],
+          };
+        }
+
+        // 3. Get or create user's organization
+        let organizationId: string | null = null;
+
+        // Try to get existing organization where user is owner
+        const { data: existingOrg } = await supabase
+          .from('organizations')
+          .select('id, slug, name')
+          .eq('owner_user_id', authContext.user_id)
+          .maybeSingle();
+
+        if (existingOrg) {
+          organizationId = existingOrg.id;
+        } else {
+          // Create new organization for user
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('username')
+            .eq('id', authContext.user_id)
+            .single();
+
+          const orgSlug = profile?.username ? `${profile.username}-org` : `user-${authContext.user_id.slice(0, 8)}-org`;
+          const orgName = profile?.username ? `${profile.username}'s Organization` : 'My Organization';
+
+          const { data: newOrg, error: orgError } = await supabase
+            .from('organizations')
+            .insert({
+              slug: orgSlug,
+              name: orgName,
+              owner_user_id: authContext.user_id,
+            })
+            .select('id')
+            .single();
+
+          if (orgError) {
+            throw new Error(`Failed to create organization: ${orgError.message}`);
+          }
+
+          organizationId = newOrg.id;
+        }
+
+        // 4. Create the project
+        const { data: project, error: projectError } = await supabase
+          .from('projects')
+          .insert({
+            slug,
+            github_repo: github_repo || '',
+            is_public: is_public || false,
+            owner_id: authContext.user_id,
+            created_by: authContext.user_id,
+            organization_id: organizationId,
+          })
+          .select('id, slug, created_at')
+          .single();
+
+        if (projectError) {
+          throw new Error(`Failed to create project: ${projectError.message}`);
+        }
+
+        // 5. Assign user as admin
+        const { error: memberError } = await supabase
+          .from('project_members')
+          .insert({
+            project_id: project.id,
+            user_id: authContext.user_id,
+            role: 'admin',
+          });
+
+        if (memberError) {
+          throw new Error(`Failed to assign admin role: ${memberError.message}`);
+        }
+
+        // 6. Log activity
+        logActivity({
+          projectId: project.id,
+          userId: authContext.user_id,
+          eventType: 'create',
+          query: `project:${slug}`,
+          resultCount: 1,
+          toolName: 'quoth_project_create',
+        });
+
+        const dashboardUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+
+        return {
+          content: [{
+            type: 'text' as const,
+            text: `## ✅ Project Created Successfully
+
+**Project Name:** ${name}
+**Slug:** \`${slug}\`
+**Project ID:** \`${project.id}\`
+**Visibility:** ${is_public ? 'Public' : 'Private'}
+**Created:** ${new Date(project.created_at).toLocaleString()}
+
+🔗 **Project Dashboard:** ${dashboardUrl}/projects/${slug}
+
+### Next Steps
+1. **Index Documentation:**
+   - Use \`quoth_propose_update\` to add your first document
+   - Documents are automatically indexed for semantic search
+
+2. **Invite Team Members:**
+   - Go to Project Settings → Members in the dashboard
+   - Invite collaborators with editor or viewer roles
+
+3. **Generate API Token:**
+   - Settings → API Tokens → Create Token
+   - Use the token for MCP authentication
+
+4. **Switch Context (if multi-project):**
+   - Use \`quoth_switch_account\` to switch between projects
+   - Current project context: \`${authContext.project_id}\`
+
+---
+*You are now the admin of this project with full access.*`,
+          }],
+        };
+      } catch (error) {
+        return {
+          content: [{
+            type: 'text' as const,
+            text: `Error creating project: ${error instanceof Error ? error.message : 'Unknown error'}`,
+          }],
+        };
+      }
+    }
+  );
+
   // Register Genesis tools
   registerGenesisTools(server, authContext);
 
