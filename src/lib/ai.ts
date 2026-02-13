@@ -141,7 +141,7 @@ export async function generateCodeEmbedding(text: string): Promise<number[]> {
     },
     body: JSON.stringify({
       model: 'jina-code-embeddings-1.5b',
-      task: 'retrieval.passage', // optimized for storing code docs
+      task: 'nl2code.passage', // store docs for natural language → code search
       dimensions: 512, // Matryoshka: truncate 896d to 512d
       input: [cleanText]
     })
@@ -175,7 +175,7 @@ export async function generateCodeQueryEmbedding(query: string): Promise<number[
     },
     body: JSON.stringify({
       model: 'jina-code-embeddings-1.5b',
-      task: 'retrieval.query', // optimized for code queries
+      task: 'nl2code.query', // search docs with natural language queries
       dimensions: 512,
       input: [query]
     })
